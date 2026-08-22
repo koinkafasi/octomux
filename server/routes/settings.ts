@@ -32,6 +32,7 @@ function throwSettingsError(err: unknown): never {
     message.startsWith('Invalid approvalTimeoutMs') ||
     message.startsWith('Invalid hookTimeoutMs') ||
     message.startsWith('Invalid aiTaskNaming') ||
+    message.startsWith('Invalid memory settings') ||
     message.includes('Invalid claude-code') ||
     message.includes('Invalid harnesses.claude-code');
   if (clientInputError) {

@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { childLogger } from './logger.js';
+import {
+  parseMemorySettings,
+  validateMemorySettings,
+  type MemorySettings,
+} from './memory-settings.js';
 import { octomuxRoot } from './octomux-root.js';
 
 const logger = childLogger('settings');
@@ -27,6 +32,13 @@ export interface OctomuxSettings {
   defaultLinearTeamKey?: string;
   defaultBaseBranch?: string;
   onboardingCompletedAt?: string;
+
+  /**
+   * Optional long-term memory provider, surfaced to workers as an MCP server.
+   * Absent (the default) means agents get no memory tools and launch exactly
+   * as before.
+   */
+  memory?: MemorySettings;
 
   /** Hours a soft-deleted task waits before permanent purge. Default 6 when absent. */
   deleteGraceHours?: number;
@@ -162,6 +174,7 @@ export async function getSettings(): Promise<OctomuxSettings> {
     defaultHarnessId: (parsed.defaultHarnessId as string) ?? DEFAULT_SETTINGS.defaultHarnessId,
     harnesses: mergedHarnesses,
     plugins,
+    memory: parseMemorySettings(parsed.memory),
     defaultTracker:
       parsed.defaultTracker === 'jira' || parsed.defaultTracker === 'linear'
         ? parsed.defaultTracker
@@ -274,6 +287,11 @@ export async function updateSettings(patch: Partial<OctomuxSettings>): Promise<O
 
   const current = await getSettings();
   const mergedHarnesses = { ...current.harnesses };
+  // Throws on a malformed block: discarding what an operator just PATCHed
+  // without telling them is worse than a 400 (the read path stays lenient).
+  const mergedMemory =
+    patch.memory !== undefined ? validateMemorySettings(patch.memory) : current.memory;
+
   const { listHarnesses, getHarness } = await import('./harnesses/index.js');
 
   if (patch.harnesses) {
@@ -314,6 +332,7 @@ export async function updateSettings(patch: Partial<OctomuxSettings>): Promise<O
     defaultHarnessId: patch.defaultHarnessId ?? current.defaultHarnessId,
     harnesses: mergedHarnesses,
     plugins: mergedPlugins,
+    memory: mergedMemory,
     defaultTracker:
       patch.defaultTracker !== undefined ? patch.defaultTracker : current.defaultTracker,
     defaultJiraBaseUrl:

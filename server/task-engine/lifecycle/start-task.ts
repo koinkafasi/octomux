@@ -7,6 +7,7 @@ import { inferRefs } from '../../ref-inference.js';
 import { childLogger } from '../../logger.js';
 import { broadcast } from '../../events.js';
 import { resolveHarnessFlags, resolveHarnessEnv } from '../../harness-flags.js';
+import { getSettings } from '../../settings.js';
 import { skillContentOverridesForScheduleId } from '../../schedule-prompt.js';
 import type { Task, RunMode } from '../../types.js';
 import {
@@ -151,7 +152,13 @@ async function prepareFirstAgentLaunch(
     harness.installHooks(setup.worktreePath, hookBaseUrl(), hookToken),
   );
 
-  flags = applyOrchestratorMcpConfig(flags, setup.worktreePath, id, hookToken);
+  flags = applyOrchestratorMcpConfig(
+    flags,
+    setup.worktreePath,
+    id,
+    hookToken,
+    (await getSettings()).memory,
+  );
 
   const baseCmd = harness.buildLaunchCommand({
     sessionId: sessionIdForLaunch,

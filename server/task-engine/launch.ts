@@ -5,6 +5,7 @@ import { childLogger } from '../logger.js';
 import { mcpServerInvocation } from '../orchestrator/runner.js';
 import { isOrchestratorManaged } from '../repositories/orchestrator.js';
 import { shellQuoteSingle } from '../shell-quote.js';
+import { memoryMcpEntry, type MemorySettings } from '../memory-settings.js';
 import { tmuxWindowSubstrate } from '../agent-session/substrate-tmux-windowed.js';
 import { setAgentHarnessSessionId } from '../repositories/index.js';
 import type { Harness } from '../harnesses/index.js';
@@ -120,14 +121,23 @@ export function writeWorkerMcpConfig(
   worktreePath: string,
   taskId: string,
   hookToken: string,
+  memory?: MemorySettings,
 ): string | null {
   const inv = mcpServerInvocation();
-  if (!inv) {
+  if (!inv && !memory) {
     logger.warn(
       { task_id: taskId, operation: 'writeWorkerMcpConfig' },
       'worker MCP: server entry not found — worker will not have report_complete tool',
     );
     return null;
+  }
+  if (!inv) {
+    // Memory alone is still worth a config: losing report_complete is a
+    // degraded orchestrator, not a reason to withhold the memory tools too.
+    logger.warn(
+      { task_id: taskId, operation: 'writeWorkerMcpConfig' },
+      'worker MCP: server entry not found — writing memory-only config',
+    );
   }
 
   const claudeDir = path.join(worktreePath, '.claude');
@@ -142,15 +152,12 @@ export function writeWorkerMcpConfig(
   if (process.env.NODE_ENV) env.NODE_ENV = process.env.NODE_ENV;
   if (process.env.OCTOMUX_DATA_DIR) env.OCTOMUX_DATA_DIR = process.env.OCTOMUX_DATA_DIR;
 
-  const cfg = {
-    mcpServers: {
-      octomux: {
-        command: inv.command,
-        args: inv.args,
-        env,
-      },
-    },
-  };
+  const mcpServers: Record<string, unknown> = {};
+  if (inv) mcpServers.octomux = { command: inv.command, args: inv.args, env };
+  // Hindsight serves one MCP endpoint per bank over HTTP, so this entry is a
+  // url rather than a spawned command like octomux's own server.
+  if (memory) mcpServers[memory.provider] = memoryMcpEntry(memory);
+  const cfg = { mcpServers };
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
 
   logger.info(
@@ -211,9 +218,13 @@ export function applyOrchestratorMcpConfig(
   worktreePath: string,
   taskId: string,
   hookToken: string,
+  memory?: MemorySettings,
 ): string {
-  if (isOrchestratorManaged(taskId)) {
-    const workerMcpConfigPath = writeWorkerMcpConfig(worktreePath, taskId, hookToken);
+  // Either reason is enough to write a config: an orchestrator-managed task
+  // needs report_complete, and a memory-configured workspace needs its tools
+  // whether or not the orchestrator is involved.
+  if (isOrchestratorManaged(taskId) || memory) {
+    const workerMcpConfigPath = writeWorkerMcpConfig(worktreePath, taskId, hookToken, memory);
     if (workerMcpConfigPath) {
       flags += ` --mcp-config ${shellQuoteSingle(workerMcpConfigPath)}`;
     }
