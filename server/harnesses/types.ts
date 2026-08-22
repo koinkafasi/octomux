@@ -175,6 +175,16 @@ export interface Harness {
    * the `harness` argument to `buildAgentStartupCommand`.
    */
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Environment this engine needs that depends on user settings, resolved the
+   * same way and at the same moment as `resolveFlags`. Static per-engine values
+   * belong on `env` above; this is for what an operator configures — a gateway
+   * base URL, a vendor host.
+   *
+   * Merged over `env` by `resolveHarnessEnv()`, so a configured value wins over
+   * the engine's built-in default.
+   */
+  resolveEnv?(settings: OctomuxSettings): Record<string, string>;
   resolveFlags(settings: OctomuxSettings): string;
   validateSettings(blob: unknown): Record<string, unknown>;
   validateAgentName(name: string): string;

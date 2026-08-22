@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { getHarness } from '../../harnesses/index.js';
 import { hookBaseUrl } from '../../hook-base-url.js';
-import { resolveHarnessFlags } from '../../harness-flags.js';
+import { resolveHarnessFlags, resolveHarnessEnv } from '../../harness-flags.js';
 import { skillContentOverridesForScheduleId } from '../../schedule-prompt.js';
 import { childLogger } from '../../logger.js';
 import {
@@ -94,6 +94,7 @@ export async function prepareAddAgentLaunch(
     worktreePath: task.worktree!,
     agentId,
     harness,
+    env: await resolveHarnessEnv(harness),
   });
 
   return { agentId, hookToken, sessionIdForDb, startupCmd, harness };

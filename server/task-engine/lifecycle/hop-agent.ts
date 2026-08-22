@@ -3,7 +3,7 @@ import { getHarness } from '../../harnesses/index.js';
 import { hookBaseUrl } from '../../hook-base-url.js';
 import { childLogger } from '../../logger.js';
 import { execTmux } from '../../tmux-bin.js';
-import { resolveHarnessFlags } from '../../harness-flags.js';
+import { resolveHarnessFlags, resolveHarnessEnv } from '../../harness-flags.js';
 import { skillContentOverridesForScheduleId } from '../../schedule-prompt.js';
 import { chatDirFor, chatSessionName } from '../../chats.js';
 import type { Worker, Worktree } from '../../types.js';
@@ -100,7 +100,11 @@ export async function hopAgent(agent: Worker, targetTaskId: string | null): Prom
   await harness.installHooks(cwd, hookBaseUrl(), agent.hook_token);
 
   const baseCmd = prepareResumeLaunch({ agent, harness, flags, model: hopModel, cwd });
-  const startupCmd = buildAgentStartupCommand({ baseCmd, harness });
+  const startupCmd = buildAgentStartupCommand({
+    baseCmd,
+    harness,
+    env: await resolveHarnessEnv(harness),
+  });
   const newWindowIndex = await launchAgentWindow({
     session: newSession,
     cwd,

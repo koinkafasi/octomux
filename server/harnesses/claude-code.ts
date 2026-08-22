@@ -17,6 +17,29 @@ import {
 import { registerHarness } from './registry.js';
 import type { OctomuxSettings } from '../settings.js';
 
+/**
+ * Accept only an absolute http(s) URL for a gateway base.
+ *
+ * Narrow on purpose: the value is exported into the agent's shell, so anything
+ * that is not a plain URL is either a mistake or an attempt to smuggle shell
+ * syntax through a settings field. `new URL` rejects the malformed cases; the
+ * protocol check rejects `file:`, `javascript:` and friends.
+ */
+function validateBaseUrl(value: unknown, field: string): string {
+  if (typeof value !== 'string') throw new Error(`Invalid ${field}: expected a string`);
+  const trimmed = value.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error(`Invalid ${field}: not an absolute URL`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`Invalid ${field}: expected http or https, got ${parsed.protocol}`);
+  }
+  return trimmed;
+}
+
 function buildHookEvents(baseUrl: string, token: string) {
   const url = (event: string) => `${baseUrl}/api/hooks/${event}?token=${encodeURIComponent(token)}`;
   return {
@@ -210,8 +233,31 @@ export const claudeCodeHarness: CoreHarness = {
     return formatHarnessFlags(parts);
   },
 
+  /**
+   * Point Claude Code at an Anthropic-compatible gateway.
+   *
+   * `ANTHROPIC_BASE_URL` is read by the CLI at process start, so it has to be
+   * exported ahead of the command rather than set later — that is what
+   * `buildAgentStartupCommand` does with this map. Unlike routing through a
+   * tier-1 preset, this keeps the harness intact: hooks still install, so
+   * permission prompts, stop events and session tracking survive.
+   *
+   * `OCTOMUX_CLAUDE_BASE_URL` overrides settings, mirroring how
+   * `OCTOMUX_CLAUDE_FLAGS` overrides configured flags.
+   */
+  resolveEnv(settings: OctomuxSettings): Record<string, string> {
+    const fromEnv = process.env.OCTOMUX_CLAUDE_BASE_URL?.trim();
+    if (fromEnv) return { ANTHROPIC_BASE_URL: validateBaseUrl(fromEnv, 'OCTOMUX_CLAUDE_BASE_URL') };
+
+    const sub = (settings.harnesses?.['claude-code'] ?? {}) as { baseUrl?: string };
+    const configured = sub.baseUrl?.trim();
+    if (!configured) return {};
+    return { ANTHROPIC_BASE_URL: validateBaseUrl(configured, 'harnesses.claude-code.baseUrl') };
+  },
+
   validateSettings(blob: unknown): Record<string, unknown> {
     return validateSettingsObject(blob, 'claude-code', {
+      baseUrl: (value) => validateBaseUrl(value as string, 'harnesses.claude-code.baseUrl'),
       flags: (value) => validateFlagString(value as string, 'harnesses.claude-code.flags'),
       dangerouslySkipPermissions: (value) => {
         if (typeof value !== 'boolean') {

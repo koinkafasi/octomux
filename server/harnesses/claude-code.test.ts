@@ -1,4 +1,4 @@
-import { describe, it, expect } from '../bun-test.js';
+import { describe, it, expect, afterEach } from '../bun-test.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -58,6 +58,49 @@ describe('claudeCodeHarness', () => {
         'claude --continue --session-id s1 --verbose',
       );
     });
+  });
+});
+
+describe('resolveEnv — gateway base URL', () => {
+  const settingsWith = (sub: Record<string, unknown>) =>
+    ({ harnesses: { 'claude-code': sub } }) as never;
+
+  afterEach(() => {
+    delete process.env.OCTOMUX_CLAUDE_BASE_URL;
+  });
+
+  it('returns nothing when no base URL is configured', () => {
+    expect(claudeCodeHarness.resolveEnv?.(settingsWith({}))).toEqual({});
+  });
+
+  it('exports ANTHROPIC_BASE_URL from settings', () => {
+    expect(
+      claudeCodeHarness.resolveEnv?.(settingsWith({ baseUrl: 'http://localhost:20128' })),
+    ).toEqual({ ANTHROPIC_BASE_URL: 'http://localhost:20128' });
+  });
+
+  it('lets OCTOMUX_CLAUDE_BASE_URL override settings', () => {
+    process.env.OCTOMUX_CLAUDE_BASE_URL = 'https://gw.example';
+    expect(
+      claudeCodeHarness.resolveEnv?.(settingsWith({ baseUrl: 'http://localhost:20128' })),
+    ).toEqual({ ANTHROPIC_BASE_URL: 'https://gw.example' });
+  });
+
+  it.each([
+    ['not-a-url', 'not an absolute URL'],
+    ['/relative/path', 'not an absolute URL'],
+    ['file:///etc/passwd', 'expected http or https'],
+    ['javascript:alert(1)', 'expected http or https'],
+  ])('rejects %s', (value, message) => {
+    // The value is exported into the agent's shell, so anything that is not a
+    // plain http(s) URL is either a mistake or an attempt to smuggle something.
+    expect(() => claudeCodeHarness.resolveEnv?.(settingsWith({ baseUrl: value }))).toThrow(message);
+  });
+
+  it('rejects a bad base URL at the settings boundary too', () => {
+    expect(() => claudeCodeHarness.validateSettings({ baseUrl: 'ftp://x' })).toThrow(
+      'expected http or https',
+    );
   });
 });
 

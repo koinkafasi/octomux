@@ -10,3 +10,16 @@ export async function resolveHarnessFlags(
   const base = harness.resolveFlags(await getSettings());
   return appendOctomuxPluginFlags(base, pluginOpts);
 }
+
+/**
+ * Resolve the environment a launch of `harness` needs.
+ *
+ * Two layers, in order: the engine's static `env` (what a tier-1 preset
+ * declares), then whatever `resolveEnv` derives from user settings (what an
+ * operator configures). Settings win, so pointing an engine at a gateway
+ * overrides its built-in default rather than fighting it.
+ */
+export async function resolveHarnessEnv(harness: Harness): Promise<Record<string, string>> {
+  const settings = await getSettings();
+  return { ...harness.env, ...harness.resolveEnv?.(settings) };
+}

@@ -4,7 +4,7 @@ import { hookBaseUrl } from '../../hook-base-url.js';
 import { childLogger } from '../../logger.js';
 import { tmuxWindowSubstrate } from '../../agent-session/substrate-tmux-windowed.js';
 import { execTmux } from '../../tmux-bin.js';
-import { resolveHarnessFlags } from '../../harness-flags.js';
+import { resolveHarnessFlags, resolveHarnessEnv } from '../../harness-flags.js';
 import { skillContentOverridesForScheduleId } from '../../schedule-prompt.js';
 import type { Task, RunMode } from '../../types.js';
 import {
@@ -104,6 +104,7 @@ export async function relaunchStoppedAgents(
       worktreePath: withPrompt ? cwd : undefined,
       agentId: withPrompt ? agent.id : undefined,
       harness,
+      env: await resolveHarnessEnv(harness),
     });
     const windowIndex = await launchAgentWindow({
       session,

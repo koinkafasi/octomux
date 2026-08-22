@@ -6,7 +6,7 @@ import { getOrCreateRepoConfig } from '../../repositories/repo-config.js';
 import { inferRefs } from '../../ref-inference.js';
 import { childLogger } from '../../logger.js';
 import { broadcast } from '../../events.js';
-import { resolveHarnessFlags } from '../../harness-flags.js';
+import { resolveHarnessFlags, resolveHarnessEnv } from '../../harness-flags.js';
 import { skillContentOverridesForScheduleId } from '../../schedule-prompt.js';
 import type { Task, RunMode } from '../../types.js';
 import {
@@ -169,7 +169,7 @@ async function prepareFirstAgentLaunch(
     // Per-worktree port offset (setup/ports.ts). The same values also reach the
     // agent through .claude/settings.local.json and .octomux/ports.env; this is
     // the delivery that does not depend on the agent reading a file.
-    env: setup.env,
+    env: { ...(await resolveHarnessEnv(harness)), ...setup.env },
   });
 
   return { agentId, hookToken, sessionIdForDb, startupCmd };

@@ -1,6 +1,6 @@
 import { getHarness } from '../../harnesses/index.js';
 import { hookBaseUrl } from '../../hook-base-url.js';
-import { resolveHarnessFlags } from '../../harness-flags.js';
+import { resolveHarnessFlags, resolveHarnessEnv } from '../../harness-flags.js';
 import { skillContentOverridesForScheduleId } from '../../schedule-prompt.js';
 import { childLogger } from '../../logger.js';
 import { broadcast } from '../../events.js';
@@ -64,7 +64,7 @@ export async function respawnAgentFresh(
     prompt: opts?.prompt,
     worktreePath: opts?.prompt ? task.worktree! : undefined,
     agentId: opts?.prompt ? agent.id : undefined,
-    env: opts?.env,
+    env: { ...(await resolveHarnessEnv(harness)), ...opts?.env },
     harness,
   });
 
