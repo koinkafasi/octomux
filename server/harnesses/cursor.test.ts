@@ -56,7 +56,9 @@ describe('cursorHarness', () => {
           workspacePath: '/tmp/wt/a',
           flags: ' --verbose',
         },
-        `cursor-agent --workspace '/tmp/wt/a' --verbose`,
+        // Shell-inert paths render bare: the string form is now
+        // `argvToCommand(head)`, which quotes only tokens that need it.
+        `cursor-agent --workspace /tmp/wt/a --verbose`,
       ],
     ])('builds %j -> %s', (opts, expected) => {
       expect(cursorHarness.buildLaunchCommand(opts)).toBe(expected);
@@ -72,7 +74,7 @@ describe('cursorHarness', () => {
           workspacePath: '/tmp/wt/a',
           flags: '--force --model composer-2.5',
         }),
-      ).toBe(`cursor-agent --workspace '/tmp/wt/a' --force --model composer-2.5`);
+      ).toBe(`cursor-agent --workspace /tmp/wt/a --force --model composer-2.5`);
     });
 
     it('quotes workspace paths that contain apostrophes', () => {
@@ -99,10 +101,106 @@ describe('cursorHarness', () => {
           workspacePath: '/tmp/repo',
           flags: ' --force',
         },
-        `cursor-agent --workspace '/tmp/repo' --resume chat-abc --force`,
+        `cursor-agent --workspace /tmp/repo --resume chat-abc --force`,
       ],
     ])('builds %j -> %s', (opts, expected) => {
       expect(cursorHarness.buildResumeCommand(opts)).toBe(expected);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // argv builders (the source of truth the *Command members render)
+  // -------------------------------------------------------------------------
+
+  describe('buildLaunchArgv', () => {
+    it.each([
+      [{ sessionId: 's1' }, ['cursor-agent']],
+      [{ sessionId: 's1', flags: ' --verbose' }, ['cursor-agent', '--verbose']],
+      [
+        { sessionId: 's1', workspacePath: '/tmp/wt/a', flags: ' --verbose' },
+        ['cursor-agent', '--workspace', '/tmp/wt/a', '--verbose'],
+      ],
+      [
+        { sessionId: 's1', workspacePath: "/tmp/it's-fine" },
+        ['cursor-agent', '--workspace', "/tmp/it's-fine"],
+      ],
+      [
+        { sessionId: 's1', flags: '--force --model composer-2.5' },
+        ['cursor-agent', '--force', '--model', 'composer-2.5'],
+      ],
+    ])('builds %j', (opts, expected) => {
+      expect(cursorHarness.buildLaunchArgv?.(opts)).toEqual(expected);
+    });
+
+    it('ignores the per-task model — Cursor gets its model from resolveFlags', () => {
+      expect(cursorHarness.buildLaunchArgv?.({ sessionId: 's1', model: 'composer-9' })).toEqual([
+        'cursor-agent',
+      ]);
+    });
+  });
+
+  describe('buildResumeArgv', () => {
+    it.each([
+      [{ sessionId: 'chat-abc' }, ['cursor-agent', '--resume', 'chat-abc']],
+      [
+        { sessionId: 'chat-abc', workspacePath: '/tmp/repo', flags: ' --force' },
+        ['cursor-agent', '--workspace', '/tmp/repo', '--resume', 'chat-abc', '--force'],
+      ],
+    ])('builds %j', (opts, expected) => {
+      expect(cursorHarness.buildResumeArgv?.(opts)).toEqual(expected);
+    });
+
+    it('keeps a hostile session id as ONE argv token', () => {
+      expect(cursorHarness.buildResumeArgv?.({ sessionId: 'x; rm -rf /' })).toEqual([
+        'cursor-agent',
+        '--resume',
+        'x; rm -rf /',
+      ]);
+    });
+  });
+
+  describe('buildContinueArgv', () => {
+    it('returns null — cursor-agent has no --continue', () => {
+      expect(cursorHarness.buildContinueArgv?.({ sessionId: 's1' })).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // instructionFile / capabilities / detectReady
+  // -------------------------------------------------------------------------
+
+  describe('engine metadata', () => {
+    it('declares its instruction file', () => {
+      expect(cursorHarness.instructionFile).toBe('.cursor/rules/octomux.md');
+    });
+
+    it('declares every capability conservatively false (none binary-verified)', () => {
+      expect(cursorHarness.capabilities).toEqual({
+        contextUsage: false,
+        sessionFork: false,
+        setupHelper: false,
+        acp: false,
+      });
+    });
+  });
+
+  describe('detectReady', () => {
+    it.each([
+      ['', 'starting'],
+      ['   \n  \n', 'starting'],
+      ['Connecting to cursor-agent...', 'starting'],
+      ['Do you trust the authors of the files in this folder?', 'permission_warning'],
+      ['Trust this workspace?  [a] yes', 'permission_warning'],
+      ['Trust this folder?', 'permission_warning'],
+      ['\u2502 > \u2502', 'ready'],
+      ['> ask anything', 'ready'],
+      ['Editing src/app.ts (3s)', 'unknown'],
+    ])('classifies %j as %s', (pane, expected) => {
+      expect(cursorHarness.detectReady?.(pane)).toBe(expected);
+    });
+
+    it('the trust prompt wins over a visible prompt line', () => {
+      expect(cursorHarness.detectReady?.('> \nTrust this workspace?')).toBe('permission_warning');
     });
   });
 

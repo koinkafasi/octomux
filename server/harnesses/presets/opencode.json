@@ -1,0 +1,30 @@
+{
+  "env": {},
+  "resumeFlag": null,
+  "resumeStyle": "flag",
+  "continueFlag": null,
+  "readyPromptPrefix": null,
+  "readyDelayMs": 1500,
+  "emitsPermissionWarning": false,
+  "escapeCancelsRequest": true,
+  "hasTurnBoundaryDrain": false,
+  "hooks": {
+    "provider": null
+  },
+  "mcp": null,
+  "acp": {
+    "mode": "subcommand",
+    "args": ["acp"]
+  },
+  "capabilities": {
+    "contextUsage": false,
+    "sessionFork": false,
+    "setupHelper": false,
+    "acp": true
+  },
+  "id": "opencode",
+  "displayName": "OpenCode",
+  "command": "opencode",
+  "processNames": ["opencode", "node"],
+  "instructionFile": "AGENTS.md"
+}

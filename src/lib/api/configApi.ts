@@ -79,10 +79,22 @@ export interface SetupStatusResponse {
   hasBrew: boolean;
 }
 
+/** Per-engine feature flags (spec/engine-layer.md §2.4). */
+export interface HarnessCapabilitiesSummary {
+  contextUsage: boolean;
+  sessionFork: boolean;
+  setupHelper: boolean;
+  acp: boolean;
+}
+
 export interface HarnessSummary {
   id: string;
   displayName: string;
   sessionIdMode: 'orchestrator-assigned' | 'harness-issued';
+  /** Repo-root instruction file the engine reads (`CLAUDE.md`, `AGENTS.md`, …). */
+  instructionFile?: string;
+  /** Optional: a plugin-supplied harness may declare neither field. */
+  capabilities?: HarnessCapabilitiesSummary;
 }
 
 export interface RepoConfig {

@@ -183,6 +183,70 @@ function backfillSummariesIntoArtifacts(instance: Database, taskCols: Set<string
   }
 }
 
+/** DDL for the S1.5 tenancy anchor column. Single source for schema + migration. */
+const OWNER_ID_DDL = `owner_id TEXT NOT NULL DEFAULT 'local'`;
+
+/**
+ * S1.5 — the tenancy anchor column (`spec/engine-layer.md` §2.5).
+ *
+ * Adds `owner_id TEXT NOT NULL DEFAULT 'local'` to every application table.
+ * A single-user install carries the constant `'local'` everywhere and **no
+ * query filters on it today** — the column exists so M6's multi-tenant switch
+ * never has to rewrite a table: it is already present and already backfilled
+ * on every row.
+ *
+ * Table-driven off `sqlite_master` rather than a hardcoded list, so the tables
+ * created further up in `runMigrations` (pr_extracts, loop_runs, agents,
+ * gateway_inbound, …) and any table a future migration adds are covered
+ * without a second edit here. Three classes are skipped:
+ *  - SQLite's own bookkeeping (`sqlite_sequence`, `sqlite_stat*`) and any
+ *    `_`-prefixed migration-tool metadata table (`_sqlx_migrations` and
+ *    friends) — not ours to alter, and `sqlite_*` rejects ALTER outright;
+ *  - virtual tables, which don't support `ALTER TABLE ... ADD COLUMN`;
+ *  - any name that isn't a bare identifier, since the table name is
+ *    interpolated into the DDL rather than bound.
+ *
+ * Idempotent by column probe (`PRAGMA table_info` via `columnsOf`), so a second
+ * boot adds nothing and a third does nothing either.
+ *
+ * Deliberately runs LAST in `runMigrations`: every table exists by then, and
+ * the table-rebuild migrations above (`rebuildAgentsTable`, the
+ * `permission_prompts` and `schedules` rebuilds) recreate their tables from a
+ * literal CREATE that has no `owner_id` — running after them re-adds it. That
+ * round trip loses nothing while every row still holds the `'local'` default.
+ */
+export function addOwnerIdColumns(instance: Database): void {
+  const tables = (
+    instance.prepare(`SELECT name, sql FROM sqlite_master WHERE type = 'table'`).all() as Array<{
+      name: string;
+      sql: string | null;
+    }>
+  ).filter(
+    (t) =>
+      !t.name.startsWith('sqlite_') &&
+      !t.name.startsWith('_') &&
+      /^[A-Za-z][A-Za-z0-9_]*$/.test(t.name) &&
+      !/^\s*CREATE\s+VIRTUAL/i.test(t.sql ?? ''),
+  );
+
+  const added: string[] = [];
+  instance.transaction(() => {
+    for (const table of tables) {
+      const cols = columnsOf(instance, table.name);
+      if (cols.has('owner_id')) continue;
+      addColumn(instance, table.name, 'owner_id', OWNER_ID_DDL, cols);
+      added.push(table.name);
+    }
+  })();
+
+  if (added.length) {
+    logger.info(
+      { operation: 'addOwnerIdColumns', tables: added, count: added.length },
+      "added owner_id (default 'local') to existing tables",
+    );
+  }
+}
+
 /** Run forward-only additive migrations on an initialized database. */
 export function runMigrations(instance: Database): void {
   // Additive migrations — idempotent, one read per table.
@@ -1249,6 +1313,11 @@ export function runMigrations(instance: Database): void {
     `CREATE INDEX IF NOT EXISTS idx_tasks_depends_on
        ON tasks(depends_on) WHERE depends_on IS NOT NULL`,
   );
+
+  // ── S1.5 tenancy anchor (2026-08-21, spec/engine-layer.md §2.5) ───────────
+  // MUST stay last: it sweeps every table that exists at this point, including
+  // the ones the migrations above create or rebuild. See addOwnerIdColumns.
+  addOwnerIdColumns(instance);
 }
 
 /**

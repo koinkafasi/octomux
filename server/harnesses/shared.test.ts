@@ -4,11 +4,20 @@ import os from 'os';
 import path from 'path';
 import {
   applyModel,
+  applyModelArgv,
+  argvToCommand,
+  buildClaudeContinueArgv,
   buildClaudeContinueCommand,
+  buildClaudeLaunchArgv,
   buildClaudeLaunchCommand,
+  buildClaudeResumeArgv,
   buildClaudeResumeCommand,
+  composeArgv,
+  composeCommand,
   formatHarnessFlags,
   formatJsonConfig,
+  shellQuoteIfNeeded,
+  shellSplitFlags,
   validateSettingsObject,
   writeJsonConfig,
 } from './shared.js';
@@ -156,5 +165,129 @@ describe('validateSettingsObject', () => {
       },
     };
     expect(validateSettingsObject({ model: '  ' }, 'test', withOptional)).toEqual({});
+  });
+});
+
+describe('shellQuoteIfNeeded', () => {
+  it.each([
+    ['--verbose', '--verbose'],
+    ['claude', 'claude'],
+    ['/tmp/wt/a', '/tmp/wt/a'],
+    ['claude-opus-4-8', 'claude-opus-4-8'],
+    ['a=b,c:d@e%f+g', 'a=b,c:d@e%f+g'],
+  ])('leaves shell-inert token %j alone', (token, expected) => {
+    expect(shellQuoteIfNeeded(token)).toBe(expected);
+  });
+
+  it.each([
+    ['', "''"],
+    ['my model name', "'my model name'"],
+    ['bad;rm -rf /', "'bad;rm -rf /'"],
+    ['$(evil)', "'$(evil)'"],
+    ['`whoami`', "'`whoami`'"],
+    ['~/repo', "'~/repo'"],
+    ['a*b', "'a*b'"],
+    ["it's", "'it'\\''s'"],
+  ])('quotes %j', (token, expected) => {
+    expect(shellQuoteIfNeeded(token)).toBe(expected);
+  });
+});
+
+describe('argvToCommand', () => {
+  it.each([
+    [[], ''],
+    [['claude'], 'claude'],
+    [['claude', '--session-id', 's1'], 'claude --session-id s1'],
+    [['claude', '--model', 'my model'], "claude --model 'my model'"],
+    [['claude', '--session-id', '$(id); rm -rf /'], "claude --session-id '$(id); rm -rf /'"],
+  ])('renders %j', (argv, expected) => {
+    expect(argvToCommand(argv)).toBe(expected);
+  });
+});
+
+describe('shellSplitFlags', () => {
+  it.each<[string, string[]]>([
+    ['', []],
+    ['   ', []],
+    ['--verbose', ['--verbose']],
+    ['  --model opus  ', ['--model', 'opus']],
+    [
+      "--append-system-prompt 'be brief; then stop'",
+      ['--append-system-prompt', 'be brief; then stop'],
+    ],
+    ['--msg "double quoted value"', ['--msg', 'double quoted value']],
+    ["--msg 'it'\\''s fine'", ['--msg', "it's fine"]],
+    ['--path /a\\ b', ['--path', '/a b']],
+    ["--unterminated 'tail", ['--unterminated', 'tail']],
+    ["--empty ''", ['--empty', '']],
+  ])('splits %j', (flags, expected) => {
+    expect(shellSplitFlags(flags)).toEqual(expected);
+  });
+});
+
+describe('applyModelArgv', () => {
+  it.each<[string[], string | null | undefined, string[]]>([
+    [['claude'], 'sonnet', ['claude', '--model', 'sonnet']],
+    [['claude', '--model', 'opus'], 'sonnet', ['claude', '--model', 'sonnet']],
+    [
+      ['claude', '--dangerously-skip-permissions', '--model', 'opus'],
+      'sonnet',
+      ['claude', '--dangerously-skip-permissions', '--model', 'sonnet'],
+    ],
+    [['claude', '--model', 'opus'], null, ['claude', '--model', 'opus']],
+    [['claude', '--model', 'opus'], undefined, ['claude', '--model', 'opus']],
+    [['claude', '--model', 'opus'], '', ['claude', '--model', 'opus']],
+    // No quoting on the argv path — a metacharacter is just data in a token.
+    [['claude'], 'bad;rm -rf /', ['claude', '--model', 'bad;rm -rf /']],
+  ])('applies %j + %j', (argv, model, expected) => {
+    expect(applyModelArgv(argv, model)).toEqual(expected);
+  });
+});
+
+describe('composeArgv / composeCommand', () => {
+  it('appends the split flags to the head', () => {
+    expect(composeArgv(['engine', '--workspace', '/tmp/x'], ' --force')).toEqual([
+      'engine',
+      '--workspace',
+      '/tmp/x',
+      '--force',
+    ]);
+  });
+
+  it('quotes only head tokens that need it and appends flags verbatim', () => {
+    expect(composeCommand(['engine', '--workspace', "/tmp/it's"], "--msg 'hi there'")).toBe(
+      "engine --workspace '/tmp/it'\\''s' --msg 'hi there'",
+    );
+  });
+});
+
+describe('argv ⇄ command equivalence', () => {
+  // The string builders are renderers over the same invocation, so re-splitting
+  // their output must reproduce the argv exactly — including for values that
+  // carry shell metacharacters.
+  const cases = [
+    { sessionId: 's1' },
+    { sessionId: 's1', agent: 'planner' },
+    { sessionId: 's1', flags: ' --dangerously-skip-permissions' },
+    { sessionId: 's1', flags: ' --model opus' },
+    { sessionId: 's1', model: 'sonnet' },
+    { sessionId: 's1', flags: ' --model opus', model: 'claude-opus-4-8' },
+    { sessionId: 's1', flags: "--append-system-prompt 'be brief; then stop'" },
+    { sessionId: '$(id); rm -rf /' },
+    { sessionId: 's1', model: 'bad;rm -rf /' },
+  ];
+
+  it.each(cases)('launch round-trips %j', (opts) => {
+    expect(shellSplitFlags(buildClaudeLaunchCommand(opts))).toEqual(buildClaudeLaunchArgv(opts));
+  });
+
+  it.each(cases)('resume round-trips %j', (opts) => {
+    expect(shellSplitFlags(buildClaudeResumeCommand(opts))).toEqual(buildClaudeResumeArgv(opts));
+  });
+
+  it.each(cases)('continue round-trips %j', (opts) => {
+    expect(shellSplitFlags(buildClaudeContinueCommand(opts))).toEqual(
+      buildClaudeContinueArgv(opts),
+    );
   });
 });

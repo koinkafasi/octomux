@@ -2,10 +2,11 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { Harness, HarnessLaunchOpts, HarnessResumeOpts } from './types.js';
+import type { CoreHarness, HarnessLaunchOpts, HarnessResumeOpts, ReadyState } from './types.js';
 import { validateAgentName, validateFlagString } from './types.js';
 import {
-  flagsSuffix,
+  composeArgv,
+  composeCommand,
   formatHarnessFlags,
   formatJsonConfig,
   validateSettingsObject,
@@ -15,7 +16,6 @@ import { registerHarness } from './registry.js';
 import type { OctomuxSettings } from '../settings.js';
 import { childLogger } from '../logger.js';
 import { execTmux } from '../tmux-bin.js';
-import { shellQuoteSingle } from '../shell-quote.js';
 
 const logger = childLogger('harness:cursor');
 
@@ -46,9 +46,22 @@ const TRUST_PROMPT_RE = /trust this (?:workspace|folder)|do you trust/i;
 const TRUST_POLL_INTERVAL_MS = 200;
 const TRUST_POLL_TIMEOUT_MS = 5000;
 
-function workspaceCliArg(workspacePath: string): string {
-  return ` --workspace ${shellQuoteSingle(workspacePath)}`;
+/**
+ * argv head shared by launch and resume: the binary plus the workspace flag
+ * when octomux pins one. `--resume <id>` is appended by the caller so the
+ * token order matches what cursor-agent expects.
+ */
+function cursorHead(workspacePath?: string): string[] {
+  return workspacePath ? ['cursor-agent', '--workspace', workspacePath] : ['cursor-agent'];
 }
+
+/**
+ * Cursor's Workspace Trust gate, in the wordings shipped so far, plus the
+ * generic "ready" and "starting" shapes of the cursor-agent TUI.
+ */
+const CURSOR_STARTING_RE = /connecting|loading|starting|initializ|signing in/i;
+const CURSOR_PROMPT_RE = /^\s*>\s*$|^\s*>\s+\S/;
+const BOX_GLYPHS_RE = /[\u2502\u2503\u2506\u2507\u250a\u250b\u254e|]/g;
 
 function hooksJsonObject(bridgeDest: string) {
   const hookEntry = { command: bridgeDest, type: 'command', timeout: 5 };
@@ -83,7 +96,7 @@ function resolveBridgeSource(): string {
   throw new Error(`Cannot locate bin/octomux-hook-bridge.js from ${startDir} (walked up 6 levels)`);
 }
 
-export const cursorHarness: Harness = {
+export const cursorHarness: CoreHarness = {
   id: 'cursor',
   displayName: 'Cursor',
   sessionIdMode: 'harness-issued',
@@ -92,18 +105,60 @@ export const cursorHarness: Harness = {
     return crypto.randomUUID();
   },
 
+  instructionFile: '.cursor/rules/octomux.md',
+  capabilities: {
+    // Deliberately conservative: none of these four are verified against a
+    // real cursor-agent build (spec/engine-layer.md §3 lists Cursor as
+    // source-derived, not binary-verified). cursor-agent does report token
+    // usage in its TUI and does have `--resume`, but octomux has not confirmed
+    // a machine-readable usage channel, a fork-session equivalent, or an ACP
+    // mode — so they stay false until someone checks against the binary.
+    contextUsage: false,
+    sessionFork: false,
+    setupHelper: false,
+    acp: false,
+  },
+
+  // argv is the real builder; the *Command members render the same head.
+  // Note: `model` is intentionally ignored on both paths — for Cursor the
+  // model arrives inside the resolved flags (`resolveFlags` always appends
+  // `--model <id>`), and honouring the per-task override here as well would
+  // change today's behaviour, not just its spelling.
+  buildLaunchArgv({ flags = '', workspacePath }: HarnessLaunchOpts): string[] {
+    return composeArgv(cursorHead(workspacePath), flags);
+  },
+
+  buildResumeArgv({ sessionId, flags = '', workspacePath }: HarnessResumeOpts): string[] {
+    return composeArgv([...cursorHead(workspacePath), '--resume', sessionId], flags);
+  },
+
+  buildContinueArgv(_opts: HarnessResumeOpts): null {
+    return null;
+  },
+
   buildLaunchCommand({ flags = '', workspacePath }: HarnessLaunchOpts): string {
-    const ws = workspacePath ? workspaceCliArg(workspacePath) : '';
-    return `cursor-agent${ws}${flagsSuffix(flags)}`;
+    return composeCommand(cursorHead(workspacePath), flags);
   },
 
   buildResumeCommand({ sessionId, flags = '', workspacePath }: HarnessResumeOpts): string {
-    const ws = workspacePath ? workspaceCliArg(workspacePath) : '';
-    return `cursor-agent${ws} --resume ${sessionId}${flagsSuffix(flags)}`;
+    return composeCommand([...cursorHead(workspacePath), '--resume', sessionId], flags);
   },
 
   buildContinueCommand(_opts: HarnessResumeOpts): null {
     return null;
+  },
+
+  /**
+   * Same trust-prompt regex `postLaunch` polls with, exposed as a pure
+   * classifier so the gate can be detected without a tmux round-trip.
+   */
+  detectReady(paneContent: string): ReadyState {
+    if (!paneContent.trim()) return 'starting';
+    if (TRUST_PROMPT_RE.test(paneContent)) return 'permission_warning';
+    const lines = paneContent.split('\n').map((l) => l.replace(BOX_GLYPHS_RE, ' ').trimEnd());
+    if (lines.some((line) => CURSOR_PROMPT_RE.test(line))) return 'ready';
+    if (CURSOR_STARTING_RE.test(paneContent)) return 'starting';
+    return 'unknown';
   },
 
   async installHooks(worktreePath: string, baseUrl: string, hookToken: string): Promise<void> {

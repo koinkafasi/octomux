@@ -87,6 +87,7 @@
     "husky"
   ],
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
     "@base-ui/react": "^1.2.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -160,7 +161,7 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
     "bun-types": "^1.3.14",
-    "concurrently": "^9.1.0",
+    "concurrently": "^10.0.5",
     "conventional-changelog-cli": "^5.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",

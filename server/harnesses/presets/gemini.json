@@ -1,0 +1,37 @@
+{
+  "env": {},
+  "resumeFlag": "--resume",
+  "resumeStyle": "flag",
+  "continueFlag": null,
+  "readyPromptPrefix": "> ",
+  "readyDelayMs": 1500,
+  "emitsPermissionWarning": false,
+  "escapeCancelsRequest": true,
+  "hasTurnBoundaryDrain": false,
+  "hooks": {
+    "provider": null
+  },
+  "mcp": {
+    "inject": "settings_file",
+    "settingsPath": ".gemini/settings.json",
+    "envVar": null,
+    "flag": null,
+    "transport": "sse"
+  },
+  "acp": {
+    "mode": "flag",
+    "args": ["--acp"]
+  },
+  "capabilities": {
+    "contextUsage": true,
+    "sessionFork": false,
+    "setupHelper": false,
+    "acp": true
+  },
+  "id": "gemini",
+  "displayName": "Gemini CLI",
+  "command": "gemini",
+  "args": ["--approval-mode", "yolo"],
+  "processNames": ["gemini", "node"],
+  "instructionFile": "AGENTS.md"
+}

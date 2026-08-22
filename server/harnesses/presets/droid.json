@@ -1,0 +1,28 @@
+{
+  "env": {},
+  "resumeFlag": null,
+  "resumeStyle": "flag",
+  "continueFlag": null,
+  "readyPromptPrefix": null,
+  "readyDelayMs": 1500,
+  "emitsPermissionWarning": false,
+  "escapeCancelsRequest": true,
+  "hasTurnBoundaryDrain": false,
+  "hooks": {
+    "provider": null
+  },
+  "mcp": null,
+  "acp": null,
+  "capabilities": {
+    "contextUsage": false,
+    "sessionFork": false,
+    "setupHelper": true,
+    "acp": false
+  },
+  "id": "droid",
+  "displayName": "Factory Droid",
+  "command": "droid",
+  "args": ["--autonomy", "skip-permissions-unsafe"],
+  "processNames": ["droid", "node"],
+  "instructionFile": "AGENTS.md"
+}

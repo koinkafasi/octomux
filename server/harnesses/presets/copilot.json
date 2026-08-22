@@ -1,0 +1,28 @@
+{
+  "env": {},
+  "resumeFlag": null,
+  "resumeStyle": "flag",
+  "continueFlag": null,
+  "readyPromptPrefix": null,
+  "readyDelayMs": 1500,
+  "emitsPermissionWarning": false,
+  "escapeCancelsRequest": true,
+  "hasTurnBoundaryDrain": false,
+  "hooks": {
+    "provider": null
+  },
+  "mcp": null,
+  "acp": null,
+  "capabilities": {
+    "contextUsage": false,
+    "sessionFork": false,
+    "setupHelper": true,
+    "acp": false
+  },
+  "id": "copilot",
+  "displayName": "GitHub Copilot CLI",
+  "command": "copilot",
+  "args": ["--allow-all-tools"],
+  "processNames": ["copilot", "node"],
+  "instructionFile": ".github/copilot-instructions.md"
+}

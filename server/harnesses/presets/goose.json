@@ -1,0 +1,27 @@
+{
+  "env": {},
+  "resumeFlag": null,
+  "resumeStyle": "flag",
+  "continueFlag": null,
+  "readyPromptPrefix": null,
+  "readyDelayMs": 1500,
+  "emitsPermissionWarning": false,
+  "escapeCancelsRequest": true,
+  "hasTurnBoundaryDrain": false,
+  "hooks": {
+    "provider": null
+  },
+  "mcp": null,
+  "acp": null,
+  "capabilities": {
+    "contextUsage": false,
+    "sessionFork": false,
+    "setupHelper": true,
+    "acp": false
+  },
+  "id": "goose",
+  "displayName": "Goose",
+  "command": "goose",
+  "processNames": ["goose"],
+  "instructionFile": ".goosehints"
+}

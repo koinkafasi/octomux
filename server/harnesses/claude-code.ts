@@ -1,11 +1,14 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import type { Harness } from './types.js';
+import type { CoreHarness, ReadyState } from './types.js';
 import { validateAgentName, validateFlagString } from './types.js';
 import {
+  buildClaudeContinueArgv,
   buildClaudeContinueCommand,
+  buildClaudeLaunchArgv,
   buildClaudeLaunchCommand,
+  buildClaudeResumeArgv,
   buildClaudeResumeCommand,
   formatHarnessFlags,
   validateSettingsObject,
@@ -24,7 +27,29 @@ function buildHookEvents(baseUrl: string, token: string) {
   };
 }
 
-export const claudeCodeHarness: Harness = {
+/**
+ * Claude Code's bypass-permissions / trust gate. Any of these lines means the
+ * TUI is waiting on a keypress before it will accept a prompt.
+ */
+const CLAUDE_PERMISSION_WARNING_RE =
+  /bypass permissions mode|do you want to (?:proceed|trust)|yes, i accept|press enter to continue/i;
+
+/** Splash / boot chatter drawn before the input box exists. */
+const CLAUDE_STARTING_RE = /welcome to claude code|loading|starting|initializ|logging in/i;
+
+/**
+ * The idle input box. Claude Code draws it inside a border, so box-drawing
+ * glyphs are stripped before the `>` prompt is matched; `? for shortcuts` is
+ * the footer that accompanies it.
+ */
+const CLAUDE_PROMPT_RE = /^\s*>\s*$|^\s*>\s+\S/;
+const BOX_GLYPHS_RE = /[\u2502\u2503\u2506\u2507\u250a\u250b\u254e|]/g;
+
+function paneLines(paneContent: string): string[] {
+  return paneContent.split('\n').map((line) => line.replace(BOX_GLYPHS_RE, ' ').trimEnd());
+}
+
+export const claudeCodeHarness: CoreHarness = {
   id: 'claude-code',
   displayName: 'Claude Code',
   sessionIdMode: 'orchestrator-assigned',
@@ -33,9 +58,38 @@ export const claudeCodeHarness: Harness = {
     return crypto.randomUUID();
   },
 
+  instructionFile: 'CLAUDE.md',
+  capabilities: {
+    // `/context` and the Stop hook payload both report token usage.
+    contextUsage: true,
+    // `claude --fork-session` exists on the installed binary.
+    sessionFork: true,
+    // No octomux-driven setup pass: once the user is logged in, `claude` runs
+    // unattended.
+    setupHelper: false,
+    // The `claude` binary itself does not speak ACP — `claude-code-acp` is a
+    // separate adapter (spec/engine-layer.md §3) and would register as its own
+    // engine.
+    acp: false,
+  },
+
+  // argv is the real builder; the *Command members render the same head.
+  buildLaunchArgv: buildClaudeLaunchArgv,
+  buildResumeArgv: buildClaudeResumeArgv,
+  buildContinueArgv: buildClaudeContinueArgv,
+
   buildLaunchCommand: buildClaudeLaunchCommand,
   buildResumeCommand: buildClaudeResumeCommand,
   buildContinueCommand: buildClaudeContinueCommand,
+
+  detectReady(paneContent: string): ReadyState {
+    if (!paneContent.trim()) return 'starting';
+    if (CLAUDE_PERMISSION_WARNING_RE.test(paneContent)) return 'permission_warning';
+    if (paneLines(paneContent).some((line) => CLAUDE_PROMPT_RE.test(line))) return 'ready';
+    if (paneContent.includes('? for shortcuts')) return 'ready';
+    if (CLAUDE_STARTING_RE.test(paneContent)) return 'starting';
+    return 'unknown';
+  },
 
   async installHooks(worktreePath: string, baseUrl: string, hookToken: string) {
     const { ALLOWED_TOOLS, DENIED_TOOLS } = await import('../hook-settings.js');

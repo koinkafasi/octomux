@@ -189,7 +189,7 @@ describe('Database', () => {
       const cols = (db.pragma('table_info(permission_prompts)') as { name: string }[]).map(
         (c) => c.name,
       );
-      expect(cols).toEqual(PERMISSION_PROMPTS_TABLE_COLUMNS);
+      expect(cols).toEqual([...PERMISSION_PROMPTS_TABLE_COLUMNS, 'owner_id']);
     });
 
     it('adds hook_activity column to workers table', () => {
@@ -246,7 +246,7 @@ describe('Database', () => {
       const cols = (db.pragma('table_info(worktrees)') as Array<{ name: string }>).map(
         (c) => c.name,
       );
-      expect(cols).toEqual(WORKTREES_TABLE_COLUMNS);
+      expect(cols).toEqual([...WORKTREES_TABLE_COLUMNS, 'owner_id']);
     });
 
     it('adds tasks.worktree_id column', () => {
@@ -373,7 +373,7 @@ describe('Database', () => {
     it('creates user_terminals table with expected columns', () => {
       const cols = db.pragma('table_info(user_terminals)') as Array<{ name: string }>;
       const names = cols.map((c) => c.name);
-      expect(names).toEqual(USER_TERMINALS_TABLE_COLUMNS);
+      expect(names).toEqual([...USER_TERMINALS_TABLE_COLUMNS, 'owner_id']);
     });
 
     it('cascades user_terminals on task delete', () => {

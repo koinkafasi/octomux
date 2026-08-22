@@ -1,0 +1,37 @@
+{
+  "env": {},
+  "resumeFlag": null,
+  "resumeStyle": "flag",
+  "continueFlag": null,
+  "readyPromptPrefix": null,
+  "readyDelayMs": 1500,
+  "emitsPermissionWarning": false,
+  "escapeCancelsRequest": true,
+  "hasTurnBoundaryDrain": false,
+  "hooks": {
+    "provider": null
+  },
+  "mcp": {
+    "inject": "settings_file",
+    "settingsPath": ".qwen/settings.json",
+    "envVar": null,
+    "flag": null,
+    "transport": "sse"
+  },
+  "acp": {
+    "mode": "flag",
+    "args": ["--acp"]
+  },
+  "capabilities": {
+    "contextUsage": false,
+    "sessionFork": false,
+    "setupHelper": false,
+    "acp": true
+  },
+  "id": "qwen",
+  "displayName": "Qwen Code",
+  "command": "qwen",
+  "args": ["--approval-mode", "yolo"],
+  "processNames": ["qwen", "node"],
+  "instructionFile": "AGENTS.md"
+}

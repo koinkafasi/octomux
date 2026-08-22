@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS worktrees (
     mode          TEXT NOT NULL,
     status        TEXT NOT NULL DEFAULT 'available',
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    last_used_at  TEXT
+    last_used_at  TEXT,
+    owner_id      TEXT NOT NULL DEFAULT 'local'
 );
 CREATE INDEX IF NOT EXISTS idx_worktrees_path ON worktrees(path);
 CREATE INDEX IF NOT EXISTS idx_worktrees_status ON worktrees(status);
@@ -36,7 +37,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     harness_id                   TEXT NOT NULL DEFAULT 'claude-code',
     deleted_at                   TEXT,
     created_at                   TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at                   TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at                   TEXT NOT NULL DEFAULT (datetime('now')),
+    owner_id                     TEXT NOT NULL DEFAULT 'local'
 );
 
 CREATE TABLE IF NOT EXISTS task_updates (
@@ -47,7 +49,8 @@ CREATE TABLE IF NOT EXISTS task_updates (
   from_status TEXT,
   to_status   TEXT,
   body        TEXT,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  owner_id    TEXT NOT NULL DEFAULT 'local'
 );
 CREATE INDEX IF NOT EXISTS idx_task_updates_task_created ON task_updates(task_id, created_at);
 
@@ -57,6 +60,7 @@ CREATE TABLE IF NOT EXISTS task_external_refs (
   ref         TEXT NOT NULL,
   url         TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  owner_id    TEXT NOT NULL DEFAULT 'local',
   PRIMARY KEY (task_id, integration)
 );
 
@@ -67,7 +71,8 @@ CREATE TABLE IF NOT EXISTS integrations (
   config_json TEXT NOT NULL,
   enabled     INTEGER NOT NULL DEFAULT 1,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  owner_id    TEXT NOT NULL DEFAULT 'local'
 );
 
 -- Per-task tmux worker (a Claude Code / Cursor process running inside a task's
@@ -83,7 +88,8 @@ CREATE TABLE IF NOT EXISTS workers (
     harness_session_id TEXT,
     harness_id        TEXT NOT NULL DEFAULT 'claude-code',
     hook_token        TEXT NOT NULL DEFAULT '',
-    created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    owner_id          TEXT NOT NULL DEFAULT 'local'
 );
 
 CREATE TABLE IF NOT EXISTS permission_prompts (
@@ -96,6 +102,7 @@ CREATE TABLE IF NOT EXISTS permission_prompts (
     status     TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     resolved_at TEXT,
+    owner_id    TEXT NOT NULL DEFAULT 'local',
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
     FOREIGN KEY (agent_id) REFERENCES workers(id) ON DELETE CASCADE
 );
@@ -111,7 +118,8 @@ CREATE TABLE IF NOT EXISTS user_terminals (
     window_index INTEGER NOT NULL,
     label        TEXT NOT NULL,
     status       TEXT NOT NULL DEFAULT 'idle',
-    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    owner_id     TEXT NOT NULL DEFAULT 'local'
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_terminals_task ON user_terminals(task_id);
@@ -124,7 +132,8 @@ CREATE TABLE IF NOT EXISTS repo_configs (
     format_command  TEXT NOT NULL DEFAULT 'bun run format',
     lint_command    TEXT NOT NULL DEFAULT 'bun run lint:fix',
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    owner_id        TEXT NOT NULL DEFAULT 'local'
 );
 
 CREATE TABLE IF NOT EXISTS file_review_state (
@@ -132,6 +141,7 @@ CREATE TABLE IF NOT EXISTS file_review_state (
     file_path          TEXT NOT NULL,
     reviewed_at        TEXT NOT NULL DEFAULT (datetime('now')),
     reviewed_at_commit TEXT NOT NULL,
+    owner_id           TEXT NOT NULL DEFAULT 'local',
     PRIMARY KEY (task_id, file_path),
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
@@ -140,7 +150,8 @@ CREATE INDEX IF NOT EXISTS idx_file_review_state_task ON file_review_state(task_
 CREATE TABLE IF NOT EXISTS config (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
     github_login    TEXT,
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    owner_id        TEXT NOT NULL DEFAULT 'local'
 );
 
 CREATE TABLE IF NOT EXISTS inline_comments (
@@ -154,6 +165,7 @@ CREATE TABLE IF NOT EXISTS inline_comments (
     body                 TEXT NOT NULL,
     created_at           TEXT NOT NULL DEFAULT (datetime('now')),
     resolved_at          TEXT,
+    owner_id             TEXT NOT NULL DEFAULT 'local',
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_inline_comments_task_file
@@ -164,6 +176,7 @@ CREATE TABLE IF NOT EXISTS hook_settings (
   key        TEXT NOT NULL,
   enabled    INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  owner_id   TEXT NOT NULL DEFAULT 'local',
   PRIMARY KEY (scope, key)
 );
 
@@ -181,7 +194,8 @@ CREATE TABLE IF NOT EXISTS schedules (
   config_json   TEXT,
   prompt        TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  owner_id      TEXT NOT NULL DEFAULT 'local'
 );
 
 CREATE TABLE IF NOT EXISTS runs (
@@ -196,7 +210,8 @@ CREATE TABLE IF NOT EXISTS runs (
   result_json   TEXT,
   error         TEXT,
   started_at    TEXT NOT NULL DEFAULT (datetime('now')),
-  ended_at      TEXT
+  ended_at      TEXT,
+  owner_id      TEXT NOT NULL DEFAULT 'local'
 );
 CREATE INDEX IF NOT EXISTS idx_runs_workflow_kind ON runs(workflow_kind);
 CREATE INDEX IF NOT EXISTS idx_runs_schedule_id ON runs(schedule_id);
@@ -213,6 +228,7 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     state       TEXT NOT NULL DEFAULT 'open',
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    owner_id    TEXT NOT NULL DEFAULT 'local',
     UNIQUE(task_id, branch)
 );
 CREATE INDEX IF NOT EXISTS idx_pull_requests_task_id ON pull_requests(task_id);

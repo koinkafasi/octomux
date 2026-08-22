@@ -1,0 +1,28 @@
+{
+  "env": {},
+  "resumeFlag": null,
+  "resumeStyle": "flag",
+  "continueFlag": null,
+  "readyPromptPrefix": null,
+  "readyDelayMs": 1500,
+  "emitsPermissionWarning": false,
+  "escapeCancelsRequest": true,
+  "hasTurnBoundaryDrain": false,
+  "hooks": {
+    "provider": null
+  },
+  "mcp": null,
+  "acp": null,
+  "capabilities": {
+    "contextUsage": false,
+    "sessionFork": false,
+    "setupHelper": true,
+    "acp": false
+  },
+  "id": "aider",
+  "displayName": "Aider",
+  "command": "aider",
+  "args": ["--yes-always", "--no-auto-commits"],
+  "processNames": ["aider", "python", "python3"],
+  "instructionFile": "CONVENTIONS.md"
+}

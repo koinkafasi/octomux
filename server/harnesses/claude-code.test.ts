@@ -119,6 +119,168 @@ describe('buildContinueCommand model override', () => {
   });
 });
 
+describe('claudeCodeHarness argv builders', () => {
+  describe('buildLaunchArgv', () => {
+    it.each([
+      [{ sessionId: 's1' }, ['claude', '--session-id', 's1']],
+      [{ sessionId: 's1', agent: null }, ['claude', '--session-id', 's1']],
+      [
+        { sessionId: 's1', agent: 'orchestrator' },
+        ['claude', '--agent', 'orchestrator', '--session-id', 's1'],
+      ],
+      [{ sessionId: 's1', flags: ' --verbose' }, ['claude', '--session-id', 's1', '--verbose']],
+      [
+        { sessionId: 's1', agent: 'planner', flags: ' --verbose' },
+        ['claude', '--agent', 'planner', '--session-id', 's1', '--verbose'],
+      ],
+      [
+        { sessionId: 's1', flags: '--permission-mode bypassPermissions --add-dir /tmp/x' },
+        [
+          'claude',
+          '--session-id',
+          's1',
+          '--permission-mode',
+          'bypassPermissions',
+          '--add-dir',
+          '/tmp/x',
+        ],
+      ],
+    ])('builds %j', (opts, expected) => {
+      expect(claudeCodeHarness.buildLaunchArgv?.(opts)).toEqual(expected);
+    });
+
+    it('rejects bad agent names on the argv path too', () => {
+      expect(() =>
+        claudeCodeHarness.buildLaunchArgv?.({ sessionId: 's1', agent: 'evil; rm' }),
+      ).toThrow(/Invalid agent name/);
+    });
+
+    it('unwraps a quoted flag value into exactly one argv token', () => {
+      expect(
+        claudeCodeHarness.buildLaunchArgv?.({
+          sessionId: 's1',
+          flags: "--append-system-prompt 'be brief; then stop'",
+        }),
+      ).toEqual(['claude', '--session-id', 's1', '--append-system-prompt', 'be brief; then stop']);
+    });
+
+    it('carries a hostile session id as one token — no shell syntax survives argv', () => {
+      expect(claudeCodeHarness.buildLaunchArgv?.({ sessionId: '$(id); rm -rf /' })).toEqual([
+        'claude',
+        '--session-id',
+        '$(id); rm -rf /',
+      ]);
+    });
+  });
+
+  describe('buildResumeArgv / buildContinueArgv', () => {
+    it.each([
+      [{ sessionId: 's1' }, ['claude', '--resume', 's1']],
+      [{ sessionId: 's1', flags: ' --verbose' }, ['claude', '--resume', 's1', '--verbose']],
+    ])('resume builds %j', (opts, expected) => {
+      expect(claudeCodeHarness.buildResumeArgv?.(opts)).toEqual(expected);
+    });
+
+    it.each([
+      [{ sessionId: 's1' }, ['claude', '--continue', '--session-id', 's1']],
+      [
+        { sessionId: 's1', flags: ' --verbose' },
+        ['claude', '--continue', '--session-id', 's1', '--verbose'],
+      ],
+    ])('continue builds %j', (opts, expected) => {
+      expect(claudeCodeHarness.buildContinueArgv?.(opts)).toEqual(expected);
+    });
+  });
+
+  describe('model override on the argv path', () => {
+    it.each([
+      [{ sessionId: 's1', model: 'sonnet' }, ['claude', '--session-id', 's1', '--model', 'sonnet']],
+      [
+        { sessionId: 's1', flags: ' --model opus', model: 'sonnet' },
+        ['claude', '--session-id', 's1', '--model', 'sonnet'],
+      ],
+      [
+        {
+          sessionId: 's1',
+          flags: ' --dangerously-skip-permissions --model opus',
+          model: 'sonnet',
+        },
+        ['claude', '--session-id', 's1', '--dangerously-skip-permissions', '--model', 'sonnet'],
+      ],
+      [
+        { sessionId: 's1', flags: ' --model opus' },
+        ['claude', '--session-id', 's1', '--model', 'opus'],
+      ],
+    ])('builds %j', (opts, expected) => {
+      expect(claudeCodeHarness.buildLaunchArgv?.(opts)).toEqual(expected);
+    });
+
+    it('never quotes on the argv path — the value is one raw token', () => {
+      expect(
+        claudeCodeHarness.buildLaunchArgv?.({ sessionId: 's1', model: 'bad;rm -rf /' }),
+      ).toEqual(['claude', '--session-id', 's1', '--model', 'bad;rm -rf /']);
+    });
+
+    it('resume and continue strip the flags --model too', () => {
+      expect(
+        claudeCodeHarness.buildResumeArgv?.({
+          sessionId: 's1',
+          flags: ' --model opus',
+          model: 'sonnet',
+        }),
+      ).toEqual(['claude', '--resume', 's1', '--model', 'sonnet']);
+      expect(
+        claudeCodeHarness.buildContinueArgv?.({
+          sessionId: 's1',
+          flags: ' --model opus',
+          model: 'sonnet',
+        }),
+      ).toEqual(['claude', '--continue', '--session-id', 's1', '--model', 'sonnet']);
+    });
+  });
+});
+
+describe('claudeCodeHarness engine metadata', () => {
+  it('declares its instruction file', () => {
+    expect(claudeCodeHarness.instructionFile).toBe('CLAUDE.md');
+  });
+
+  it('declares capabilities', () => {
+    expect(claudeCodeHarness.capabilities).toEqual({
+      contextUsage: true,
+      sessionFork: true,
+      setupHelper: false,
+      acp: false,
+    });
+  });
+});
+
+describe('claudeCodeHarness.detectReady', () => {
+  it.each([
+    ['', 'starting'],
+    ['  \n \n ', 'starting'],
+    ['Welcome to Claude Code!', 'starting'],
+    ['Loading plugins…', 'starting'],
+    [
+      'WARNING: Claude Code running in Bypass Permissions mode\n Yes, I accept',
+      'permission_warning',
+    ],
+    ['Do you want to proceed?\n 1. Yes', 'permission_warning'],
+    ['\u2502 > \u2502\n  ? for shortcuts', 'ready'],
+    ['> ', 'ready'],
+    ['> plan the migration', 'ready'],
+    ['\u2733 Thinking… (12s · esc to interrupt)', 'unknown'],
+  ])('classifies %j as %s', (pane, expected) => {
+    expect(claudeCodeHarness.detectReady?.(pane)).toBe(expected);
+  });
+
+  it('the permission gate outranks a prompt line elsewhere in the pane', () => {
+    expect(claudeCodeHarness.detectReady?.('> \nDo you want to proceed?')).toBe(
+      'permission_warning',
+    );
+  });
+});
+
 describe('claudeCodeHarness.installHooks', () => {
   it('writes settings.local.json with token in URLs', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'octomux-harness-'));

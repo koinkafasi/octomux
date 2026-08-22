@@ -43,12 +43,19 @@ router.get('/api/health', (_req: Request, res: Response) => {
   res.status(db.ok ? 200 : 503).json({ status, uptime, db, running_tasks, data_dir });
 });
 
+// `instructionFile` and `capabilities` are additive (spec/engine-layer.md §2.1
+// / §2.4): the engine picker shows which repo-root file an engine reads, and
+// hides features whose capability flag is false. Both are optional on
+// `Harness` — a plugin-supplied one may omit them — so they are emitted only
+// when present, leaving the pre-existing three-field shape untouched.
 router.get('/api/harnesses', (_req: Request, res: Response) => {
   res.json(
-    listHarnesses().map(({ id, displayName, sessionIdMode }) => ({
+    listHarnesses().map(({ id, displayName, sessionIdMode, instructionFile, capabilities }) => ({
       id,
       displayName,
       sessionIdMode,
+      ...(instructionFile !== undefined ? { instructionFile } : {}),
+      ...(capabilities !== undefined ? { capabilities } : {}),
     })),
   );
 });

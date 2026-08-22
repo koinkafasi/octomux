@@ -5,7 +5,7 @@ import os from 'os';
 import { getArtifactSummary } from '../artifact.js';
 import Database from '../sqlite.js';
 import { SCHEMA, applyPragmas } from './schema.js';
-import { runMigrations } from './migrations.js';
+import { addOwnerIdColumns, runMigrations } from './migrations.js';
 import {
   TASKS_TABLE_COLUMNS,
   AGENTS_TABLE_COLUMNS,
@@ -47,7 +47,8 @@ describe('runMigrations (isolated)', () => {
     const wtCols = (db.pragma('table_info(worktrees)') as Array<{ name: string }>).map(
       (c) => c.name,
     );
-    expect(wtCols).toEqual(WORKTREES_TABLE_COLUMNS);
+    // owner_id is appended by the S1.5 tenancy sweep (see the owner_id describe below).
+    expect(wtCols).toEqual([...WORKTREES_TABLE_COLUMNS, 'owner_id']);
 
     const tables = (
       db.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as Array<{
@@ -71,7 +72,7 @@ describe('runMigrations (isolated)', () => {
     const extractCols = (db.pragma('table_info(pr_extracts)') as Array<{ name: string }>).map(
       (c) => c.name,
     );
-    expect(extractCols).toEqual(PR_EXTRACTS_TABLE_COLUMNS);
+    expect(extractCols).toEqual([...PR_EXTRACTS_TABLE_COLUMNS, 'owner_id']);
     const extractIndexes = (
       db
         .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='pr_extracts'`)
@@ -282,6 +283,117 @@ describe('runMigrations (isolated)', () => {
         db.prepare(`SELECT prompt FROM schedules WHERE id = 'sched-1'`).get() as { prompt: string }
       ).prompt;
       expect(secondPrompt).toBe('Legacy body');
+    });
+  });
+
+  // ── S1.5 tenancy anchor (spec/engine-layer.md §2.5) ────────────────────────
+  describe('owner_id tenancy column', () => {
+    function freshDb(): Database {
+      const instance = new Database(':memory:');
+      applyPragmas(instance);
+      instance.exec(SCHEMA);
+      return instance;
+    }
+
+    /** Every table the sweep is expected to cover — SQLite/meta names excluded. */
+    function appTables(instance: Database): string[] {
+      return (
+        instance.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as Array<{
+          name: string;
+        }>
+      )
+        .map((r) => r.name)
+        .filter((n) => !n.startsWith('sqlite_') && !n.startsWith('_'));
+    }
+
+    function colNames(instance: Database, table: string): string[] {
+      return (instance.pragma(`table_info(${table})`) as Array<{ name: string }>).map(
+        (c) => c.name,
+      );
+    }
+
+    function ownerCols(
+      instance: Database,
+      table: string,
+    ): Array<{ notnull: number; dflt_value: string | null }> {
+      return (
+        instance.pragma(`table_info(${table})`) as Array<{
+          name: string;
+          notnull: number;
+          dflt_value: string | null;
+        }>
+      ).filter((c) => c.name === 'owner_id');
+    }
+
+    it("gives every application table one owner_id column, NOT NULL default 'local'", () => {
+      db = freshDb();
+      runMigrations(db);
+
+      const tables = appTables(db);
+      // Guards against a silently-empty sweep passing this test vacuously.
+      expect(tables.length).toBeGreaterThan(20);
+
+      for (const table of tables) {
+        const cols = ownerCols(db, table);
+        // Shape includes the table name so a failure says WHICH table.
+        expect({ table, count: cols.length }).toEqual({ table, count: 1 });
+        expect({ table, notnull: cols[0].notnull, dflt: cols[0].dflt_value }).toEqual({
+          table,
+          notnull: 1,
+          dflt: `'local'`,
+        });
+      }
+    });
+
+    it("backfills pre-existing rows with 'local' on an upgrade install", () => {
+      // Simulate a DB written before S1.5: take the column back off two
+      // representative tables, then seed rows the way an old install would.
+      db = freshDb();
+      db.exec(`ALTER TABLE worktrees DROP COLUMN owner_id`);
+      db.exec(`ALTER TABLE tasks DROP COLUMN owner_id`);
+      db.prepare(
+        `INSERT INTO worktrees (id, path, repo_path, mode)
+         VALUES ('w1', '/tmp/wt', '/tmp/repo', 'worktree')`,
+      ).run();
+      db.prepare(
+        `INSERT INTO tasks (id, title, description, worktree_id) VALUES ('t1', 'T', 'D', 'w1')`,
+      ).run();
+
+      runMigrations(db);
+
+      expect(db.prepare(`SELECT owner_id FROM worktrees WHERE id = 'w1'`).get()).toEqual({
+        owner_id: 'local',
+      });
+      expect(db.prepare(`SELECT owner_id FROM tasks WHERE id = 't1'`).get()).toEqual({
+        owner_id: 'local',
+      });
+    });
+
+    it('is idempotent — a second sweep adds nothing and does not throw', () => {
+      db = freshDb();
+      runMigrations(db);
+      const before = appTables(db).map((t) => `${t}:${colNames(db, t).join(',')}`);
+
+      expect(() => addOwnerIdColumns(db)).not.toThrow();
+      expect(() => runMigrations(db)).not.toThrow();
+
+      expect(appTables(db).map((t) => `${t}:${colNames(db, t).join(',')}`)).toEqual(before);
+    });
+
+    it('skips SQLite internals and _-prefixed migration metadata tables', () => {
+      db = freshDb();
+      // AUTOINCREMENT forces sqlite_sequence into existence.
+      db.exec(`CREATE TABLE seq_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT)`);
+      db.prepare(`INSERT INTO seq_probe (v) VALUES ('x')`).run();
+      // The shape of a foreign migration tool's bookkeeping table.
+      db.exec(`CREATE TABLE _sqlx_migrations (version BIGINT PRIMARY KEY, description TEXT)`);
+
+      expect(() => runMigrations(db)).not.toThrow();
+
+      expect(colNames(db, 'sqlite_sequence')).toEqual(['name', 'seq']);
+      expect(colNames(db, '_sqlx_migrations')).toEqual(['version', 'description']);
+      // ...while an ordinary table sitting next to them is still swept.
+      expect(colNames(db, 'seq_probe')).toContain('owner_id');
     });
   });
 });

@@ -22,7 +22,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // plugin/skills and plugin/agents, and builtInSkillsDir() resolves
 // `<assetRoot()>/plugin/skills`. Naming the leaf dirs here silently bundled
 // neither — the compiled binary shipped zero skills until this was fixed.
-const TREES = ['plugin', 'kinds', 'templates', 'workflows', 'dist'];
+// `server/harnesses/presets` is nested, not top-level like the rest: `walk()` keys
+// every file relative to `root`, and `enginePresetsDir()` resolves
+// `<assetRoot()>/server/harnesses/presets`, so the two line up. Without this entry
+// a compiled binary resolves a directory that does not exist and ships zero engine
+// presets — the same silent failure the `plugin` comment above records.
+const TREES = ['plugin', 'kinds', 'templates', 'workflows', 'dist', 'server/harnesses/presets'];
 const OUT = path.join(root, 'server', 'assets.generated.json');
 
 function walk(dir, base, out) {
