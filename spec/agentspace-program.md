@@ -225,3 +225,146 @@ Bu, "AgentSpace'in modüllerini eklemek"ten farklı bir eksen: onlarla aynı
 özellikleri kovalamak yerine, 12 motorlu olmanın **tek başına anlamlı olduğu**
 bir yetenek. Yeni bir sürüm olarak planlanmalı (**M7 — Değerlendirme**), ve
 M1'in `AgentEvent.usage` olayı ile M3'ün maliyet katmanı zaten onun altyapısı.
+
+## Teslim durumu (2026-08-22)
+
+Dal `feat/engine-layer-m1`.
+
+| Commit    | Kapsam                                                                                                                                                                                                                               |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `28b66f1` | **M1 çekirdeği** — S1.5 şeması (34 tabloda `owner_id`), `AgentEvent` sözleşmesi + normalizer'lar, deklaratif preset katmanı + 9 preset, argv geçişi, preset→registry (`/api/harnesses` 11 motor), ACP istemcisi + 191 test           |
+| `da0b13c` | **Worktree başına port izolasyonu** (nerve deseni: deterministik offset, SQLite UNIQUE kayıt defteri, canlılık probu) ve **tree-hash verify önbelleği** (greentree deseni: geçici `GIT_INDEX_FILE` üzerinden gerçek git tree SHA'sı) |
+
+**M1'de kasten yapılmayan:** ACP koşucusu — bkz. `spec/engine-layer.md` §6.
+
+**Bilinen takip işleri:**
+
+- `commitAll`, `.octomux/loop-status.json` ve `verify-cache.json`'ı görev dalına
+  commit'liyor. Dar bir hariç tutma doğru çözüm ama `info/exclude` worktree'ler
+  arasında paylaşılır ve pathspec zaten takipli bir dosyayı index'ten çıkarmaz —
+  kendi değişikliğini hak ediyor. `.octomux/`'un tamamını hariç tutmak **yanlış**:
+  `artifact.md` de orada ve `server/artifact.ts` amacını "it diffs" diye yazıyor.
+- `server/pty.test.ts` `--parallel` altında yük-hassas flake veriyor (izole 6/6).
+  Bir kez `error-middleware.test.ts`'te de görüldü. Bu değişikliklerden önce de vardı.
+
+## Pazar sinyalleri (port edilecek kod yok)
+
+Bunlar kapalı ticari ürünler. Referans haritasına girmezler — okunacak kaynak
+yok. Konumlandırma bilgisi olarak burada.
+
+### WorkBuddy (Tencent CodeBuddy) — codebuddy.cn/work
+
+_"AI çalışma tezgâhı: bir kişi komuta eder, tüm sektörlerden uzmanlar uygular."_
+100+ alan uzmanı, tek cümlelik komuttan otonom teslimata, çoklu uzman paralel
+çalışması, MCP ekosistemi + özel Skills, çoklu model işbirliği. Masaüstü
+(Windows/macOS/HarmonyOS) + WeChat mini-program + WeCom. Hedef segment açıkça
+yazılı: **OPC 一人公司** — tek kişilik şirket, solo girişimci, mikro ekip.
+
+**Alınacak tek fikir:** yazılım senaryosunda rol hattı açıkça tanımlı — ürün
+müdürü gereksinimi belirler, mimar tasarlar _ve görevleri böler_, mühendisler
+toplu uygular, QA doğrular — **ve "küçük gereksinimler hızlı mod destekler"**.
+Karmaşıklığa göre yol ayrımı: her görev tam hattı hak etmiyor. octomux'un
+`plugin/agents/` altında rolleri var ama bu kararı vermiyor.
+
+**Doğruladığı iki bahsimiz:** çoklu motor (多模型协同) ve sohbet tabanlı hafif
+ön yüz (bizde `server/gateway/`, Telegram + Slack).
+
+**Stratejik okuma:** kapsamı bizden çok geniş — genel ofis işi, kodlama sadece
+dört senaryodan biri. Yatay gidiyorlar. Bizim ayrımımız dikey olmalı: kodlama
+ajanlarını _ölçülebilir_ biçimde yönetmek. M7 değerlendirme tezi tam bu farkı
+derinleştiriyor; kapsam yarışına girmek onu köreltir.
+
+### AgentSpace (Muratify)
+
+Program bu ürünün yetenek yüzeyini hedef alıyor; envanteri ve modül eşlemesi
+yukarıda. Kapalı kaynak, `~/.agentdesk`, sıfırdan yazılmış.
+
+## Orkestratör taraması II (2026-08-22)
+
+Dört repo incelendi. Üçü küçük (0–23★), biri 79★. Hepsi MIT. Kod olarak port
+edilecek bir şey yok — katkıları fikir ve disiplin düzeyinde.
+
+### [Agent Hive](https://github.com/intertwine/hive-orchestrator) — M7'yi yeniden şekillendiriyor
+
+23★, MIT, Python. Konumu bizimle aynı: harness'ın _üstünde_ bir kontrol
+düzlemi (Pi, OpenClaw, Hermes, Codex, Claude Code'un hepsini sürüyor).
+
+Tek cümlesi M7 tezimizin somut hali:
+
+> **"Agents do not decide when they are done. `PROGRAM.md` evaluators and
+> promotion policy do."**
+
+**octomux bugün:** ajan `octomux emit --status done` ile _kendi_ bitişini
+beyan eder, yanına `--verify '<cmd>'` ikili bir geç/kal koyar.
+
+**Hive'ın modeli kesinlikle daha güçlü:** tamamlanma kararı bildirimsel,
+çoğul değerlendiricilere ve bir _terfi politikasına_ aittir — ajana değil.
+Bir kabuk komutunun çıkış kodu tek ve kaba bir sinyal; bir değerlendirici
+kümesi hem çoğuldur hem de repoya işlenmiş, incelenebilir bir sözleşmedir.
+
+**M7 için karar:** `--verify`'ı korumak ama üstüne bir değerlendirici katmanı
+koymak. Aday sıralaması (omp-best-of), ajanın kendi fazı (Grove `phase`),
+çalıştırma makbuzu (h5i `box export`) ve maliyet (M3) bu katmanın girdileri
+olur; tamamlanma kararını onlar verir.
+
+İkinci fikir: _"Machine state stays explicit — tasks, runs, memory, events,
+briefs live in predictable files instead of hidden session state."_ octomux'ta
+`.octomux/` zaten bu; Hive bunu bir ilke olarak adlandırmış.
+
+### [hermes-concurrent-agents](https://github.com/r0b0tlab/hermes-concurrent-agents) — yanlış alan, doğru disiplin
+
+79★, MIT. Alanı NVIDIA GB10 / DGX Spark üzerinde **yerel GPU çıkarım
+throughput'u** — bizim problemimiz değil. Ve sık paylaşılan modernizasyon
+planı başında _"Historical and superseded. Do not execute"_ diyor; otoriter
+olan `docs/current-state-report.md`.
+
+Aktarılabilir üç pratik:
+
+- **Reservation-before-claim admission** — kapasiteyi önce ayır, sonra işi
+  al. `setup/ports.ts`'in UNIQUE-index tahkimi aynı şekil; ajan sevkiyatı
+  için de doğru desen.
+- **Telemetri yoksa muhafazakâr kabul** — ölçemiyorsan güvenli tarafa düş.
+- **Üretilen support matrix sürüm iddiaları için otoriter**, ve CI "zorunlu
+  kararlı sözleşmeler" ile "tavsiye niteliğinde drift probe"u ayırıyor.
+
+Ve taklit edilmeye değer bir bölüm başlığı: **"Explicit limitations"** — ne
+_yapmadıklarını_ sayıyorlar (uzak yerleşim yok, sandboxing iddiası yok,
+sağlayıcı normalizasyonu yok). Bizim spec'lerimizdeki "kasten yapılmayan"
+notlarının olgun hali.
+
+**Aktarılmayan:** PID yeniden kullanımına karşı procfs start-tick sahipliği.
+octomux **hiç PID takip etmiyor** — kimlik tmux oturum adı, canlılık
+`pane_current_command`. Bu hata sınıfına yapısal olarak bağışık.
+
+### [hydra](https://github.com/krowxx/hydra) — bir ucuz iyi fikir
+
+0★ ama 169 dosya. Gemini/Codex/Claude'u paylaşılan HTTP daemon + görev
+kuyruğu + worktree izolasyonuyla sürüyor.
+
+> _"a local heuristic classifies your prompt and picks the best agent —
+> **with zero extra API calls**"_
+
+Yönlendirme için LLM'e ödeme yapmamak. 12 motorlu bir sistemde doğrudan
+değerli, ve M7'nin "hangi motor hangi işte iyi" ölçümü bu sezgiseli
+besleyebilir — ölçüm yönlendirmeyi eğitir.
+
+### [SigmaLink / Claude-Multiplex](https://github.com/Tetrahedroned/Claude-Multiplex) — bir paketleme notu
+
+0★, WIP. Electron 30 + TS 5.9, gerçek PTY'lerde ajan ızgaraları, worktree
+izolasyonu. Bizimle aynı kategori ve **aynı konumda**: Linux'u aynı
+`electron-builder.yml`'den derliyorlar ama test kapsamına almamışlar.
+
+M6 için pratik nokta: macOS kurulumunu `curl | bash` ile yapıyorlar çünkü
+`curl` indirilene `com.apple.quarantine` etiketi koymuyor — Gatekeeper'ın ilk
+açılış uyarısı böylece hiç çıkmıyor.
+
+### Yinelenen desen: rol hattı
+
+Dört bağımsız kaynakta aynı yapı: **WorkBuddy** (PM → mimar → mühendisler →
+QA), **hydra** (Claude önerir → Gemini eleştirir → Claude düzeltir → Codex
+uygular), **claude-dev-system** (paperclip → openclaw → hermes), ve octomux'un
+kendi `plugin/agents/`'ı (orchestrator / planner / reviewer).
+
+Desen zaten bizde. Eksik olan tek parça WorkBuddy'nin eklediği şey:
+**karmaşıklığa göre yol ayrımı** — "küçük gereksinimler hızlı mod destekler".
+Her görev tam hattı hak etmiyor.
