@@ -4,6 +4,7 @@ import {
   TasksIcon,
   ReviewsIcon,
   MonitorIcon,
+  OfficeIcon,
   WorkspacesIcon,
   OrchestratorIcon,
   AgentsIcon,
@@ -34,6 +35,7 @@ export const NAV_ITEMS: ReadonlyArray<{
 // generated per-kind "More" rows (spec/workflow-consolidation.md §4.1).
 export const MORE_ITEMS = [
   { key: 'monitor', label: 'Monitor', to: '/monitor', Icon: MonitorIcon },
+  { key: 'office', label: 'Office', to: '/office', Icon: OfficeIcon },
   { key: 'workspaces', label: 'Workspaces', to: '/workspaces', Icon: WorkspacesIcon },
   { key: 'orchestrator', label: 'Orchestrator', to: '/orchestrator', Icon: OrchestratorIcon },
   { key: 'agents', label: 'Agents', to: '/agents', Icon: AgentsIcon },

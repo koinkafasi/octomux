@@ -6,8 +6,13 @@ import { EmptyState } from '@/components/EmptyState';
 import { AgentGridCell } from '@/components/AgentGridCell';
 import { TerminalRectIcon } from '@/components/icons';
 import type { Task } from '@octomux/types';
+import { flattenRunningAgents } from '@/lib/running-agents';
 
 const REFRESH_MS = 5000;
+
+// Re-exported for the existing `./GridMonitor` import sites and tests; the
+// definition moved to src/lib so /office does not pull xterm in with it.
+export { flattenRunningAgents, type FlatAgent } from '@/lib/running-agents';
 
 export function gridColumns(count: number): number {
   if (count <= 1) return 1;
@@ -16,34 +21,6 @@ export function gridColumns(count: number): number {
   if (count <= 6) return 3;
   if (count <= 9) return 3;
   return 4;
-}
-
-interface FlatAgent {
-  key: string;
-  taskId: string;
-  windowIndex: number;
-  taskTitle: string;
-  agentName: string;
-  activity: 'active' | 'idle' | 'waiting';
-}
-
-export function flattenRunningAgents(tasks: Task[]): FlatAgent[] {
-  const out: FlatAgent[] = [];
-  for (const task of tasks) {
-    if (task.runtime_state !== 'running' && task.runtime_state !== 'setting_up') continue;
-    for (const agent of task.workers ?? []) {
-      if (agent.status === 'stopped') continue;
-      out.push({
-        key: `${task.id}:${agent.window_index}`,
-        taskId: task.id,
-        windowIndex: agent.window_index,
-        taskTitle: task.title || '(untitled task)',
-        agentName: agent.label,
-        activity: agent.hook_activity,
-      });
-    }
-  }
-  return out;
 }
 
 export default function GridMonitor() {

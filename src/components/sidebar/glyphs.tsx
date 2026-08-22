@@ -249,6 +249,28 @@ export function WorkspacesIcon({ color }: { color: string }) {
   );
 }
 
+export function OfficeIcon({ color }: { color: string }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+      aria-hidden="true"
+    >
+      <path d="M3 21h18" />
+      <path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16" />
+      <path d="M15 21V11h4a2 2 0 0 1 2 2v8" />
+      <path d="M8 7h4M8 11h4M8 15h4" />
+    </svg>
+  );
+}
+
 export function OrchestratorIcon({ color }: { color: string }) {
   return (
     <svg
