@@ -1,3 +1,31 @@
+> ### This is a fork
+>
+> Upstream is **[ShreyPaharia/octomux](https://github.com/ShreyPaharia/octomux)** — MIT,
+> Copyright (c) 2026 Shrey Paharia. That licence and copyright are unchanged in
+> [`LICENSE`](LICENSE) and apply to everything the fork inherits, which is most of this
+> tree. The badges below point at upstream because they are upstream's.
+>
+> What this fork adds so far, on top of that base:
+>
+> - **Engine layer.** Two harnesses became eleven, via declarative tier-1 presets
+>   validated by ajv, an argv-based launch path replacing shell-string
+>   construction, and a normalized cross-engine `AgentEvent` contract. An ACP
+>   client exists but is not wired into the task engine — see
+>   [`spec/engine-layer.md`](spec/engine-layer.md) §6 for why that is a second
+>   execution model rather than a second argv.
+> - **Per-worktree port isolation**, so two tasks running dev servers stop
+>   colliding, with deterministic offsets rather than hashed ones.
+> - **Tree-hash verify caching**, so a loop iteration that changed nothing does
+>   not re-run the verify command.
+> - **A pixel-art office view** at `/office`, and optional long-term memory
+>   surfaced to workers over MCP.
+>
+> `src/lib/office/` is **Apache-2.0**, ported from
+> [agora-lab](https://github.com/LiXin97/agora-lab); its
+> [`NOTICE`](src/lib/office/NOTICE) lists every derived file and travels with the
+> code. The programme this fork is executing is written up in
+> [`spec/agentspace-program.md`](spec/agentspace-program.md).
+
 [![CI](https://github.com/ShreyPaharia/octomux/actions/workflows/ci.yml/badge.svg)](https://github.com/ShreyPaharia/octomux/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/octomux)](https://www.npmjs.com/package/octomux)
 [![license](https://img.shields.io/github/license/ShreyPaharia/octomux)](LICENSE)
