@@ -226,6 +226,29 @@ Bu, "AgentSpace'in modüllerini eklemek"ten farklı bir eksen: onlarla aynı
 bir yetenek. Yeni bir sürüm olarak planlanmalı (**M7 — Değerlendirme**), ve
 M1'in `AgentEvent.usage` olayı ile M3'ün maliyet katmanı zaten onun altyapısı.
 
+### Tamamlanma kararı ajanın değil (Agent Hive, 2026-08-22)
+
+Bu bölüm ilk yazıldığında ölçümü bir _rapor_ olarak tarif ediyordu. Agent
+Hive'ın modeli daha ileri gidiyor ve M7'nin şeklini değiştiriyor:
+
+> "Agents do not decide when they are done. `PROGRAM.md` evaluators and
+> promotion policy do."
+
+**Bugünkü octomux:** ajan `octomux emit --status done` ile kendi bitişini beyan
+eder; `--verify '<cmd>'` yanında ikili bir geç/kal sağlar. Yani tamamlanma
+kararı ya ajanın beyanına ya da tek bir çıkış koduna dayanır.
+
+**M7'nin hedefi:** `--verify` korunur ama tek yetkili olmaktan çıkar. Üstüne
+repoya işlenmiş, bildirimsel bir **değerlendirici kümesi** ve bir **terfi
+politikası** gelir. Yukarıdaki tablodaki parçalar bu katmanın girdileridir —
+aday sıralaması, ajanın kendi fazı, çalıştırma makbuzu, maliyet — ve karar
+onların bileşkesidir, ajanın kendi raporu değil.
+
+Neden önemli: bir çıkış kodu tek ve kaba bir sinyaldir; bir değerlendirici
+kümesi hem çoğuldur hem de kod incelemesinden geçmiş bir sözleşmedir. Ralph
+loop'unun "done + verify geçti" sonlandırma koşulu da bunun özel bir hali
+haline gelir.
+
 ## Teslim durumu (2026-08-22)
 
 Dal `feat/engine-layer-m1`.
