@@ -165,6 +165,10 @@ async function prepareFirstAgentLaunch(
     prompt: task.initial_prompt,
     worktreePath: setup.worktreePath,
     agentId,
+    // Per-worktree port offset (setup/ports.ts). The same values also reach the
+    // agent through .claude/settings.local.json and .octomux/ports.env; this is
+    // the delivery that does not depend on the agent reading a file.
+    env: setup.env,
   });
 
   return { agentId, hookToken, sessionIdForDb, startupCmd };

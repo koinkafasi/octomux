@@ -234,6 +234,23 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 CREATE INDEX IF NOT EXISTS idx_pull_requests_task_id ON pull_requests(task_id);
 CREATE INDEX IF NOT EXISTS idx_pull_requests_state ON pull_requests(state);
 
+-- Per-task port offset, so two worktrees running 'docker compose up' don't
+-- fight over the same Postgres/Redis/app port. One row per task holding an
+-- integer offset; every service port is derived arithmetically from it in
+-- server/task-engine/setup/ports.ts.
+--
+-- The UNIQUE on 'offset' is the whole concurrency story: two tasks racing to
+-- claim the same offset are resolved by the constraint (loser retries the next
+-- one), which is why this is a table and not a lockfile. 'offset' is a SQLite
+-- keyword but a legal unquoted column name here, and it is what the callers
+-- call it, so it stays unadorned.
+CREATE TABLE IF NOT EXISTS port_allocations (
+    task_id    TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    offset     INTEGER NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    owner_id   TEXT NOT NULL DEFAULT 'local'
+);
+
 `;
 
 /** Apply SQLite pragmas required for octomux (WAL + foreign keys). */

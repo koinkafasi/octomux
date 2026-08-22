@@ -1314,6 +1314,45 @@ export function runMigrations(instance: Database): void {
        ON tasks(depends_on) WHERE depends_on IS NOT NULL`,
   );
 
+  // ── Per-worktree port allocations (2026-08-22) ────────────────────────────
+  // The table itself is declared in db/schema.ts and created by SCHEMA, which
+  // runs before this function — so by here it always exists. What can't live in
+  // SCHEMA is repair of a table that already existed in an older shape, which
+  // is what the three steps below cover. All idempotent, all forward-only.
+  const portAllocationCols = columnsOf(instance, 'port_allocations');
+  // No DEFAULT: SQLite rejects ALTER TABLE ADD COLUMN with a non-constant
+  // default like datetime('now'). New rows get it from SCHEMA's declaration;
+  // rows predating the column keep NULL, which no reader treats as meaningful.
+  addColumn(instance, 'port_allocations', 'created_at', 'created_at TEXT', portAllocationCols);
+
+  // The UNIQUE on `offset` is what makes a concurrent claim safe (the loser
+  // takes SQLITE_CONSTRAINT and walks to the next offset). A table created
+  // before that constraint existed would silently hand two tasks the same
+  // ports, so re-assert it as an index — same guarantee, and expressible as a
+  // migration where an inline table constraint is not.
+  instance.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_port_allocations_offset
+       ON port_allocations(offset)`,
+  );
+
+  // Drop allocations whose task is gone. ON DELETE CASCADE handles this on any
+  // connection that has `foreign_keys = ON` (applyPragmas sets it), but a task
+  // deleted through a connection without it — the `sqlite3` CLI defaults to
+  // off — strands the row, and a stranded row holds its offset out of the pool
+  // forever. Cheap to re-check on every boot.
+  const orphaned = instance
+    .prepare(
+      `DELETE FROM port_allocations
+        WHERE task_id NOT IN (SELECT id FROM tasks)`,
+    )
+    .run().changes;
+  if (orphaned > 0) {
+    logger.info(
+      { operation: 'runMigrations', table: 'port_allocations', released: orphaned },
+      'released port allocations whose task no longer exists',
+    );
+  }
+
   // ── S1.5 tenancy anchor (2026-08-21, spec/engine-layer.md §2.5) ───────────
   // MUST stay last: it sweeps every table that exists at this point, including
   // the ones the migrations above create or rebuild. See addOwnerIdColumns.

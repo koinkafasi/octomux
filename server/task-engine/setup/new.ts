@@ -6,6 +6,7 @@ import { childLogger } from '../../logger.js';
 import { computeMergeBase } from '../../git-commits.js';
 import { validateRepo, revParseHead, addWorktreeWithBranch, slugifyTitle } from '../git.js';
 import { writeAgentLocalSettings, DISABLED_PLUGINS_IN_WORKTREES } from '../launch.js';
+import { provisionTaskPorts } from './ports.js';
 import type { Task } from '../../types.js';
 import type { SetupResult } from './types.js';
 
@@ -102,11 +103,19 @@ export async function setupNew(task: Task): Promise<SetupResult> {
     'createTask: wrote agent-local settings',
   );
 
+  // Give the worktree its own port band so a `docker compose up` here can't
+  // collide with one in a sibling task's worktree. Runs after the settings
+  // write above, since it merges its vars into that same file. Best-effort —
+  // provisionTaskPorts never throws; a task without ports is exactly as usable
+  // as every task was before this existed.
+  const provision = await provisionTaskPorts(task.id, worktreePath);
+
   return {
     worktreePath,
     branch: finalBranch,
     baseBranch: task.base_branch,
     baseSha,
     installHooksAt: worktreePath,
+    env: provision?.env,
   };
 }

@@ -22,6 +22,7 @@ import {
 import { getHarness } from '../harnesses/index.js';
 import { isTmuxTargetMissing } from './sessions.js';
 import { scratchDirFor } from './reconcile.js';
+import { releasePortOffset } from './setup/ports.js';
 import { cleanupLinkedSessions } from './sessions.js';
 
 const logger = childLogger('task-engine/cleanup');
@@ -42,6 +43,12 @@ export async function closeTask(task: Task): Promise<void> {
   if (task.worktree_id) {
     releaseWorktree(task.worktree_id);
   }
+  // Close preserves the worktree for resume but nothing is running in it, so the
+  // port offset goes back to the pool. Resume re-allocates and, unless another
+  // task took it meanwhile, gets the same lowest-free offset back — so the
+  // predictable-URL property survives the common case. Holding it instead would
+  // let closed-but-undeleted tasks exhaust the 100-slot pool.
+  releasePortOffset(task.id);
   logger.info(
     { task_id: task.id, operation: 'closeTask' },
     'closeTask: DB marked task closed + agents stopped',
