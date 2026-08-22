@@ -1,0 +1,89 @@
+NOTICE — third-party code in src/lib/office/
+============================================
+
+This directory contains a port of the pixel-art canvas engine from:
+
+    Project : agora-lab
+    Source  : https://github.com/LiXin97/agora-lab
+    Path    : packages/web/src/engine/
+    License : Apache License, Version 2.0
+              https://www.apache.org/licenses/LICENSE-2.0
+
+Copyright the agora-lab authors.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use these
+files except in compliance with the License. You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under
+the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied. See the License for the specific language governing
+permissions and limitations under the License.
+
+octomux as a whole is MIT-licensed. The files listed below are the Apache-2.0 portion
+and each one carries the attribution header required by section 4 of the License,
+naming its upstream file and the modifications made to it.
+
+
+Files derived from agora-lab
+----------------------------
+
+    octomux file                          upstream file (packages/web/src/engine/)
+    ------------------------------------  ----------------------------------------
+    src/lib/office/types.ts               types.ts
+    src/lib/office/tile-map.ts            tileMap.ts
+    src/lib/office/camera.ts              camera.ts
+    src/lib/office/sprites.ts             sprites.ts
+    src/lib/office/sprite-data.ts         spriteData.ts
+    src/lib/office/characters.ts          characters.ts
+    src/lib/office/character-sync.ts      characterSync.ts
+    src/lib/office/layout.ts              layout.ts
+    src/lib/office/renderer.ts            renderer.ts
+    src/lib/office/render-policy.ts       render-policy.ts
+    src/lib/office/lighting.ts            lighting.ts
+    src/lib/office/particles.ts           particles.ts
+    src/lib/office/assets.ts              assets.ts
+
+
+Files original to octomux (MIT, not derived from agora-lab)
+-----------------------------------------------------------
+
+    src/lib/office/index.ts               barrel re-export
+    src/lib/office/NOTICE                 this file
+    src/lib/office/*.test.ts              test suites written for this port
+
+
+Summary of changes made during the port
+---------------------------------------
+
+  * De-domained. agora-lab's engine is coupled to its research-lab vocabulary; the port
+    is not. `layout.ts` no longer branches on the roles `supervisor` / `research-staff` /
+    `student` / `paper-reviewer` — occupants declare a structural group instead
+    (`office` | `workspace` | `annex`). `characterSync.ts` no longer imports
+    `AgentRuntimeStatus` from `@agora-lab/core`; its six statuses collapse into the four
+    behaviourally distinct activities `gathering` | `busy` | `available` | `away`.
+    `Character` lost its required `name` and `role` fields in favour of an optional
+    `label`, and `FurnitureInstance.interactive` is a free-form tag rather than the
+    `'kanban' | 'meeting'` literal union.
+
+  * Framework-free. Nothing under this directory imports React, and no upstream React
+    component was ported.
+
+  * Renames. `LabLayout` -> `OfficeLayout`, `createLabLayout` -> `createOfficeLayout`,
+    `syncCharactersToAgents` -> `syncCharactersToOccupants`, `DeskPosition.name` ->
+    `DeskPosition.id`, and `spriteData.ts`'s `CHARACTER_PALETTES` ->
+    `CHARACTER_SPRITE_PALETTES` (it collided with the unrelated export of the same name
+    in `assets.ts`). Files are kebab-cased to match the surrounding codebase.
+
+  * Deletions. `layout.ts`'s dead `getDeskPositions()` / `getMeetingPositions()` helpers
+    (hard-coded coordinates unrelated to the computed layout) and its unused `WALL`
+    constant are gone.
+
+  * Additions. `sprites.ts` guards a null 2D context instead of asserting non-null;
+    `particles.ts` gained `clearParticles()`; `render-policy.ts` exports its two
+    signature functions so the dirty-check is directly testable.
+
+  * Preserved deliberately. `characterSignature()` in `render-policy.ts` and the
+    `shouldRedraw` / `shouldRedrawCanvas` dirty-check built on it are upstream's
+    low-motion performance design and were kept intact.
