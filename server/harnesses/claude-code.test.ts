@@ -61,6 +61,34 @@ describe('claudeCodeHarness', () => {
   });
 });
 
+describe('autoAcceptTrust setting', () => {
+  it('accepts a boolean', () => {
+    expect(claudeCodeHarness.validateSettings({ autoAcceptTrust: false })).toEqual({
+      autoAcceptTrust: false,
+    });
+  });
+
+  it.each([
+    ['a string', 'yes'],
+    ['a number', 1],
+    ['null', null],
+  ])('rejects %s', (_label, value) => {
+    expect(() => claudeCodeHarness.validateSettings({ autoAcceptTrust: value })).toThrow(
+      'autoAcceptTrust',
+    );
+  });
+
+  it('exposes postLaunch so the launch path can answer the gate', () => {
+    // Cursor has had one for its own trust prompt; claude-code had none, which
+    // is why a fresh worktree sat blocked.
+    expect(typeof claudeCodeHarness.postLaunch).toBe('function');
+  });
+
+  it('is a no-op under NODE_ENV=test so suites never drive a real tmux', async () => {
+    await expect(claudeCodeHarness.postLaunch?.('nonexistent:0')).resolves.toBeUndefined();
+  });
+});
+
 describe('detectReady — folder-trust gate', () => {
   it.each([
     // Verbatim from Claude Code 2.1.x in a fresh worktree; the earlier regex

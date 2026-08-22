@@ -15,7 +15,12 @@ import {
   writeJsonConfig,
 } from './shared.js';
 import { registerHarness } from './registry.js';
+import { execTmux } from '../tmux-bin.js';
+import { childLogger } from '../logger.js';
+import { getSettings } from '../settings.js';
 import type { OctomuxSettings } from '../settings.js';
+
+const logger = childLogger('harnesses/claude-code');
 
 /**
  * Accept only an absolute http(s) URL for a gateway base.
@@ -63,6 +68,11 @@ function buildHookEvents(baseUrl: string, token: string) {
  */
 const CLAUDE_PERMISSION_WARNING_RE =
   /bypass permissions mode|do you want to (?:proceed|trust)|yes, i (?:accept|trust)|trust this (?:folder|workspace|configuration)|press enter to continue|enter to confirm/i;
+
+const TRUST_POLL_INTERVAL_MS = 200;
+const TRUST_POLL_TIMEOUT_MS = 5000;
+/** How long to wait for the gate to clear after answering before falling back to Enter. */
+const TRUST_SETTLE_MS = 400;
 
 /** Splash / boot chatter drawn before the input box exists. */
 const CLAUDE_STARTING_RE = /welcome to claude code|loading|starting|initializ|logging in/i;
@@ -262,9 +272,83 @@ export const claudeCodeHarness: CoreHarness = {
     return { ANTHROPIC_BASE_URL: validateBaseUrl(configured, 'harnesses.claude-code.baseUrl') };
   },
 
+  /**
+   * Answer Claude Code's folder-trust gate so a fresh worktree does not sit
+   * blocked waiting for a keypress nobody is watching for.
+   *
+   * Opt-out via `harnesses['claude-code'].autoAcceptTrust = false`. It defaults
+   * on because the gate is confirming a `.claude/settings.local.json` octomux
+   * wrote itself for a worktree octomux created — but it is a setting rather
+   * than a hardcode because that file also carries whatever tool permissions
+   * the operator's own plugins contribute, and pre-approving those is their
+   * call to revoke.
+   *
+   * The prompt is a numbered menu ("1. Yes, I trust this folder" / "2. No,
+   * exit"), so `1` is sent rather than a bare Enter: Enter confirms whatever
+   * the cursor happens to sit on, and being wrong there exits the agent. If
+   * the gate is still up shortly after, Enter follows to confirm the now-
+   * selected choice — some builds select without confirming.
+   */
+  async postLaunch(target: string): Promise<void> {
+    if (process.env.NODE_ENV === 'test') return;
+    const settings = await getSettings();
+    const sub = (settings.harnesses?.['claude-code'] ?? {}) as { autoAcceptTrust?: boolean };
+    if (sub.autoAcceptTrust === false) return;
+
+    const capture = async (): Promise<string | null> => {
+      try {
+        const { stdout } = await execTmux(['capture-pane', '-t', target, '-p']);
+        return stdout;
+      } catch (err) {
+        logger.warn(
+          { target, err: (err as Error).message },
+          'claude-code postLaunch: tmux capture-pane failed; abandoning trust auto-accept',
+        );
+        return null;
+      }
+    };
+
+    const start = Date.now();
+    while (Date.now() - start < TRUST_POLL_TIMEOUT_MS) {
+      const pane = await capture();
+      if (pane === null) return;
+      if (CLAUDE_PERMISSION_WARNING_RE.test(pane)) {
+        try {
+          await execTmux(['send-keys', '-t', target, '1']);
+          await new Promise((r) => setTimeout(r, TRUST_SETTLE_MS));
+          const after = await capture();
+          if (after !== null && CLAUDE_PERMISSION_WARNING_RE.test(after)) {
+            await execTmux(['send-keys', '-t', target, 'Enter']);
+          }
+          logger.info(
+            { target, elapsed_ms: Date.now() - start },
+            'claude-code postLaunch: accepted folder-trust prompt',
+          );
+        } catch (err) {
+          logger.warn(
+            { target, err: (err as Error).message },
+            'claude-code postLaunch: tmux send-keys failed while accepting trust prompt',
+          );
+        }
+        return;
+      }
+      await new Promise((r) => setTimeout(r, TRUST_POLL_INTERVAL_MS));
+    }
+    logger.info(
+      { target, timeout_ms: TRUST_POLL_TIMEOUT_MS },
+      'claude-code postLaunch: no trust prompt within timeout (folder probably already trusted)',
+    );
+  },
+
   validateSettings(blob: unknown): Record<string, unknown> {
     return validateSettingsObject(blob, 'claude-code', {
       baseUrl: (value) => validateBaseUrl(value as string, 'harnesses.claude-code.baseUrl'),
+      autoAcceptTrust: (value) => {
+        if (typeof value !== 'boolean') {
+          throw new Error('Invalid claude-code.autoAcceptTrust: expected boolean');
+        }
+        return value;
+      },
       flags: (value) => validateFlagString(value as string, 'harnesses.claude-code.flags'),
       dangerouslySkipPermissions: (value) => {
         if (typeof value !== 'boolean') {
