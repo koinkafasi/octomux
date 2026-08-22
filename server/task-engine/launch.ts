@@ -55,6 +55,13 @@ export function buildAgentStartupCommand(args: {
   worktreePath?: string;
   agentId?: string;
   env?: Record<string, string>;
+  /**
+   * The engine being launched. Only its `env` is read, and it is read here
+   * rather than at each call site so that every launch path — start,
+   * add-agent, respawn, resume, hop — picks up an engine's environment
+   * without five separate edits.
+   */
+  harness?: Harness;
 }): string {
   let inner = args.baseCmd;
   if (args.prompt && args.worktreePath && args.agentId) {
@@ -79,8 +86,12 @@ export function buildAgentStartupCommand(args: {
       }
     }, PROMPT_FILE_CLEANUP_MS);
   }
-  if (args.env && Object.keys(args.env).length > 0) {
-    const exports = Object.entries(args.env)
+  // Engine environment first, caller's second: the caller's values are
+  // per-task (the port offsets from `setup/ports.ts`), so on a key collision
+  // the task-specific value must win over the engine's static default.
+  const env = { ...args.harness?.env, ...args.env };
+  if (Object.keys(env).length > 0) {
+    const exports = Object.entries(env)
       .map(([key, value]) => `${key}=${shellQuoteSingle(value)}`)
       .join(' ');
     inner = `export ${exports}; ${inner}`;

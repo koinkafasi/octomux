@@ -188,6 +188,9 @@ export function createHarnessFromPreset(preset: EnginePreset): Harness {
 
     instructionFile: preset.instructionFile,
     capabilities: toHarnessCapabilities(preset),
+    // Omitted rather than passed as `{}` so `harness.env` reads as "this engine
+    // asks for nothing" instead of "an empty set of asks".
+    ...(Object.keys(preset.env).length > 0 ? { env: preset.env } : {}),
 
     buildLaunchArgv,
     buildResumeArgv,

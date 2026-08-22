@@ -176,6 +176,49 @@ describe('buildAgentStartupCommand', () => {
     expect(cmd).not.toContain('$(cat ');
   });
 
+  it("exports the engine's own env before the command", () => {
+    const cmd = buildAgentStartupCommand({
+      baseCmd: 'claude',
+      harness: { env: { ANTHROPIC_BASE_URL: 'http://localhost:20128' } } as never,
+    });
+    // The whole script is wrapped in `shell -ic '...'`, so inner quotes appear
+    // escaped; assert on the parts rather than a literal quoting shape.
+    expect(cmd).toContain('export ANTHROPIC_BASE_URL=');
+    expect(cmd).toContain('http://localhost:20128');
+    expect(cmd.indexOf('ANTHROPIC_BASE_URL')).toBeLessThan(cmd.indexOf('claude;'));
+  });
+
+  it('lets a per-task value win over the engine default on the same key', () => {
+    const cmd = buildAgentStartupCommand({
+      baseCmd: 'claude',
+      harness: { env: { PORT: '8000', ANTHROPIC_BASE_URL: 'http://gw' } } as never,
+      env: { PORT: '8003' },
+    });
+    // setup/ports.ts computes PORT per worktree; the engine's static default
+    // must not clobber it.
+    expect(cmd).toContain('8003');
+    expect(cmd).not.toContain('8000');
+    // Keys the caller did not set still come through.
+    expect(cmd).toContain('http://gw');
+  });
+
+  it('shell-quotes env values so a crafted value stays one word', () => {
+    const cmd = buildAgentStartupCommand({
+      baseCmd: 'claude',
+      harness: { env: { EVIL: "x'; rm -rf /; echo '" } } as never,
+    });
+    // shellQuoteSingle turns each embedded quote into the `'\''` escape; its
+    // presence is what proves the value was quoted rather than interpolated.
+    expect(cmd).toContain("'\\''");
+    // And the payload never appears as a bare, unquoted command boundary.
+    expect(cmd).not.toContain("; rm -rf /; echo ';");
+  });
+
+  it('adds no export clause when neither the engine nor the caller sets env', () => {
+    const cmd = buildAgentStartupCommand({ baseCmd: 'claude' });
+    expect(cmd).not.toContain('export ');
+  });
+
   it('embeds the prompt via $(cat <file>) and writes the prompt file', () => {
     const cmd = buildAgentStartupCommand({
       baseCmd: 'claude --session-id abc',

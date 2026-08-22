@@ -100,7 +100,7 @@ export async function hopAgent(agent: Worker, targetTaskId: string | null): Prom
   await harness.installHooks(cwd, hookBaseUrl(), agent.hook_token);
 
   const baseCmd = prepareResumeLaunch({ agent, harness, flags, model: hopModel, cwd });
-  const startupCmd = buildAgentStartupCommand({ baseCmd });
+  const startupCmd = buildAgentStartupCommand({ baseCmd, harness });
   const newWindowIndex = await launchAgentWindow({
     session: newSession,
     cwd,

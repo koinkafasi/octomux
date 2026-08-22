@@ -103,6 +103,7 @@ export async function relaunchStoppedAgents(
       prompt: withPrompt ? prompt : undefined,
       worktreePath: withPrompt ? cwd : undefined,
       agentId: withPrompt ? agent.id : undefined,
+      harness,
     });
     const windowIndex = await launchAgentWindow({
       session,

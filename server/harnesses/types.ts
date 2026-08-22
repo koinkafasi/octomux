@@ -164,6 +164,17 @@ export interface Harness {
    * acting half should move to the caller once step 7 of spec §5 lands.
    */
   postLaunch?(target: string): Promise<void>;
+  /**
+   * Environment variables every launch of this engine needs, exported ahead of
+   * the command by `buildAgentStartupCommand`. Static engine configuration —
+   * an ACP bridge's socket path, a gateway `ANTHROPIC_BASE_URL`, a vendor's
+   * API host. Per-task values (the port offsets from `setup/ports.ts`) are
+   * merged over these by the caller, so a task-specific value always wins.
+   *
+   * Read at every launch path — start, add-agent, respawn, resume, hop — via
+   * the `harness` argument to `buildAgentStartupCommand`.
+   */
+  readonly env?: Readonly<Record<string, string>>;
   resolveFlags(settings: OctomuxSettings): string;
   validateSettings(blob: unknown): Record<string, unknown>;
   validateAgentName(name: string): string;

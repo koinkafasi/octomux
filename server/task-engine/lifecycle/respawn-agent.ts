@@ -65,6 +65,7 @@ export async function respawnAgentFresh(
     worktreePath: opts?.prompt ? task.worktree! : undefined,
     agentId: opts?.prompt ? agent.id : undefined,
     env: opts?.env,
+    harness,
   });
 
   const fresh = opts?.fresh ?? false;
