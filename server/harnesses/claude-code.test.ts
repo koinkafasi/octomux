@@ -61,6 +61,25 @@ describe('claudeCodeHarness', () => {
   });
 });
 
+describe('detectReady — folder-trust gate', () => {
+  it.each([
+    // Verbatim from Claude Code 2.1.x in a fresh worktree; the earlier regex
+    // matched none of these and reported the blocked pane as `unknown`.
+    ['numbered trust choice', ' ❯ 1. Yes, I trust this folder\n   2. No, exit'],
+    ['confirm footer', 'Enter to confirm · Esc to cancel'],
+    ['configuration wording', 'Only proceed if you trust this configuration.'],
+    // Older wordings that must keep matching.
+    ['bypass banner', 'Bypass permissions mode is enabled'],
+    ['accept wording', 'Yes, I accept'],
+  ])('reports permission_warning for the %s', (_label, pane) => {
+    expect(claudeCodeHarness.detectReady?.(pane)).toBe('permission_warning');
+  });
+
+  it('does not mistake the idle input box for a gate', () => {
+    expect(claudeCodeHarness.detectReady?.('> \n? for shortcuts')).not.toBe('permission_warning');
+  });
+});
+
 describe('resolveEnv — gateway base URL', () => {
   const settingsWith = (sub: Record<string, unknown>) =>
     ({ harnesses: { 'claude-code': sub } }) as never;

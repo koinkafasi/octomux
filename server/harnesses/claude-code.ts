@@ -53,9 +53,16 @@ function buildHookEvents(baseUrl: string, token: string) {
 /**
  * Claude Code's bypass-permissions / trust gate. Any of these lines means the
  * TUI is waiting on a keypress before it will accept a prompt.
+ *
+ * The folder-trust wording has changed over releases and the earlier pattern
+ * matched none of what 2.1.x actually draws — observed verbatim in a fresh
+ * worktree: "1. Yes, I trust this folder", "Enter to confirm · Esc to cancel",
+ * "Only proceed if you trust this configuration". A missed match leaves
+ * `detectReady` reporting `unknown` for a pane that is in fact blocked, so the
+ * alternatives below are kept deliberately broad.
  */
 const CLAUDE_PERMISSION_WARNING_RE =
-  /bypass permissions mode|do you want to (?:proceed|trust)|yes, i accept|press enter to continue/i;
+  /bypass permissions mode|do you want to (?:proceed|trust)|yes, i (?:accept|trust)|trust this (?:folder|workspace|configuration)|press enter to continue|enter to confirm/i;
 
 /** Splash / boot chatter drawn before the input box exists. */
 const CLAUDE_STARTING_RE = /welcome to claude code|loading|starting|initializ|logging in/i;
